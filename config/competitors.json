@@ -1,0 +1,11 @@
+[
+  // Schema: { "name": string, "url": string, "niche": string, "notes": string }
+  // Add competitor channels here after the Apr 7 kickoff session.
+  // Example:
+  // {
+  //   "name": "Channel Name",
+  //   "url": "https://www.youtube.com/@channelhandle",
+  //   "niche": "e.g. Canucks analysis, NHL trade talk",
+  //   "notes": "What they do well, gaps Dean can exploit, upload frequency"
+  // }
+]

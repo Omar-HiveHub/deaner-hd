@@ -1,0 +1,67 @@
+{
+  "youtube_highlight_channels": [
+    {
+      "name": "NHL",
+      "url": "https://www.youtube.com/@NHL",
+      "channel_id": "UCqFMzb-4AUf6WAIbl132QKA",
+      "copyright_note": "NHL owns all game footage. Use short clips only (under 30s) for commentary/analysis under fair dealing. Do not re-upload full games or long highlight reels.",
+      "search_terms": ["highlights", "goals", "top plays", "saves"]
+    },
+    {
+      "name": "Sportsnet",
+      "url": "https://www.youtube.com/@Sportsnet",
+      "channel_id": "UCzzkB_R0mRnxgDcQpb3CQkQ",
+      "copyright_note": "Rogers/Sportsnet owns rights. Use brief clips for commentary. Avoid pulling full segments or full-game broadcasts.",
+      "search_terms": ["highlights", "Canucks", "recap"]
+    },
+    {
+      "name": "TSN",
+      "url": "https://www.youtube.com/@TSN",
+      "channel_id": "UCc0qFmIiBEKZbMvVknAToQ",
+      "copyright_note": "Bell Media owns rights. Brief clips for editorial commentary only.",
+      "search_terms": ["highlights", "NHL", "recap", "top plays"]
+    },
+    {
+      "name": "ESPN",
+      "url": "https://www.youtube.com/@ESPN",
+      "channel_id": "UCiWLfSweyRNmLpgEHekhoAg",
+      "copyright_note": "Disney/ESPN owns rights. Keep clips short and clearly transformative.",
+      "search_terms": ["NHL highlights", "hockey"]
+    },
+    {
+      "name": "Vancouver Canucks",
+      "url": "https://www.youtube.com/@VancouverCanucks",
+      "channel_id": "UCbDW9fqJN7PpjSXgLAVPpwg",
+      "copyright_note": "NHL/Canucks own rights. Short reaction/commentary clips only.",
+      "search_terms": ["highlights", "goals", "practice", "interview"]
+    },
+    {
+      "name": "BarDown",
+      "url": "https://www.youtube.com/@BarDown",
+      "channel_id": "UCkp3TkyuHB7AJblCEBrJHFQ",
+      "copyright_note": "TSN/Bell Media owns rights. Fair dealing applies for short commentary clips.",
+      "search_terms": ["hockey", "viral", "highlights"]
+    }
+  ],
+
+  "screen_record_sources": [
+    {
+      "name": "NHL.com",
+      "url": "https://www.nhl.com/video",
+      "copyright_note": "NHL owns all video. Screen recording for personal editing only — do not distribute raw captures. Use as source material for commentary clips under fair dealing.",
+      "notes": "Best source for official game clips, condensed games, and NHL-produced content"
+    },
+    {
+      "name": "Sportsnet.ca",
+      "url": "https://www.sportsnet.ca/hockey/nhl/",
+      "copyright_note": "Rogers Media owns rights. Capture clips for editorial use only — short segments clearly in service of commentary.",
+      "notes": "Good for Canadian angle, Canucks coverage, post-game reaction"
+    },
+    {
+      "name": "TSN.ca",
+      "url": "https://www.tsn.ca/nhl",
+      "copyright_note": "Bell Media owns rights. Same rules as Sportsnet — editorial/commentary use only.",
+      "notes": "Insider Trading, trade deadline coverage, power rankings content"
+    }
+  ]
+}

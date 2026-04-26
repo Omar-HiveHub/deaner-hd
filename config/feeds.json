@@ -1,0 +1,76 @@
+{
+  "youtube_channels": [
+    {
+      "name": "NHL",
+      "url": "https://www.youtube.com/@NHL",
+      "channel_id": "UCqFMzb-4AUf6WAIbl132QKA",
+      "notes": "Official NHL channel — game highlights, goals of the week, top plays"
+    },
+    {
+      "name": "Sportsnet",
+      "url": "https://www.youtube.com/@Sportsnet",
+      "channel_id": "UCzzkB_R0mRnxgDcQpb3CQkQ",
+      "notes": "Canadian hockey coverage — Canucks-heavy, trades, analysis, Ron MacLean segments"
+    },
+    {
+      "name": "TSN",
+      "url": "https://www.youtube.com/@TSN",
+      "channel_id": "UCc0qFfmIiBEKZbMvVknAToQ",
+      "notes": "Canadian sports network — trade deadline coverage, playoff analysis, Insider Trading"
+    },
+    {
+      "name": "ESPN",
+      "url": "https://www.youtube.com/@ESPN",
+      "channel_id": "UCiWLfSweyRNmLpgEHekhoAg",
+      "notes": "US-side NHL coverage — Stanley Cup segments, US-market team highlights"
+    },
+    {
+      "name": "Vancouver Canucks",
+      "url": "https://www.youtube.com/@VancouverCanucks",
+      "channel_id": "UCbDW9fqJN7PpjSXgLAVPpwg",
+      "notes": "Official Canucks channel — post-game scrums, practice clips, player interviews"
+    },
+    {
+      "name": "BarDown",
+      "url": "https://www.youtube.com/@BarDown",
+      "channel_id": "UCkp3TkyuHB7AJblCEBrJHFQ",
+      "notes": "TSN's hockey culture channel — viral plays, deep dives, player features, trend topics"
+    }
+  ],
+
+  "rss_feeds": [
+    {
+      "name": "NHL.com News",
+      "url": "https://www.nhl.com/rss/news.xml",
+      "notes": "Official NHL news feed — transactions, injury reports, standings updates"
+    },
+    {
+      "name": "Sportsnet NHL",
+      "url": "https://www.sportsnet.ca/rss/nhl/",
+      "notes": "Sportsnet NHL section — Canadian team coverage, trade rumours, analysis pieces"
+    },
+    {
+      "name": "TSN NHL",
+      "url": "https://www.tsn.ca/rss/nhl",
+      "notes": "TSN NHL section — trade news, game recaps, power rankings"
+    },
+    {
+      "name": "ESPN NHL",
+      "url": "https://www.espn.com/espn/rss/nhl/news",
+      "notes": "ESPN NHL feed — US-market perspective, national storylines"
+    }
+  ],
+
+  "reddit": [
+    {
+      "name": "r/hockey",
+      "url": "https://www.reddit.com/r/hockey/.json?sort=hot&limit=25",
+      "notes": "General NHL discussion — breaking news surfaces here first, fan reactions, viral clips"
+    },
+    {
+      "name": "r/canucks",
+      "url": "https://www.reddit.com/r/canucks/.json?sort=hot&limit=25",
+      "notes": "Vancouver Canucks subreddit — local fan sentiment, post-game threads, trade talk"
+    }
+  ]
+}
