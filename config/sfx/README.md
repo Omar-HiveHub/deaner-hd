@@ -9,9 +9,11 @@ file that's missing.
 
 | File | What it is | Used when |
 |---|---|---|
-| `whoosh.wav` | Short transition sweep (~0.5s) | Played at the start of every visual break card |
-| `bed_intense.mp3` | 60s loopable music bed in A minor | Topic type: `incident` / `general` / `auto` |
-| `bed_reflective.mp3` | 60s loopable music bed in D minor | Topic type: `biography` |
+| `bed_intense.mp3` | 60s loopable synthetic bed | High-conflict stories, fights, playoff tension |
+| `bed_reflective.mp3` | 60s loopable synthetic bed | Prospect/player-analysis videos |
+| `bed_drive.mp3` | 60s loopable synthetic bed | Faster news/reaction videos |
+| `bed_tension.mp3` | 60s loopable synthetic bed | Controversy, stakes, rumours |
+| `whoosh.wav` | Legacy transition sweep | Not used by the default minimal edit |
 
 The current files are **synthetic placeholders** generated with FFmpeg — clean,
 tasteful, and license-clean (no third-party rights). They get the job done for
@@ -32,11 +34,9 @@ What to look for:
 - **bed_reflective.mp3**: emotional piano, atmospheric pad, 60–80 BPM
 - **whoosh.wav**: cinematic transition, sub-1-second, low-end heavy
 
-After swapping, render a test cut: `python scripts/assemble_video.py --topic-type biography`
+After swapping, render a test cut: `python scripts/assemble_video.py --title test`
 
-## Add more SFX later (optional)
+## SFX Later
 
-The current pipeline only places one SFX file (`whoosh.wav`) at every visual
-break. If you want to expand to script-marker-driven SFX (e.g. `[SFX: hit]`,
-`[SFX: stinger]` placed exactly where the script writes them), see the cue parsing
-TODO in `scripts/assemble_video.py:lay_voiceover_with_sound_design`.
+The default client edit does not use whooshes or transition SFX. Keep `whoosh.wav`
+only as a legacy asset for future experiments.

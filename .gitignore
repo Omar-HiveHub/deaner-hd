@@ -25,9 +25,35 @@ pipeline/rendered/*.mp4
 pipeline/recorded/*.m4a
 pipeline/recorded/*.mp3
 pipeline/recorded/*.wav
+pipeline/recorded/*.webm
+pipeline/projects/**/exports/*.mp4
+pipeline/projects/**/voiceover/*
+pipeline/projects/**/clips/raw/*
+pipeline/projects/**/clips/approved/*.mp4
+pipeline/projects/**/clips/approved/*.mov
+pipeline/projects/**/clips/approved/*.mkv
+pipeline/projects/**/_drafts/*.mp4
+pipeline/projects/**/_drafts/*.mov
+pipeline/projects/**/_drafts/*.m4a
+pipeline/projects/**/_drafts/*.mp3
+pipeline/projects/**/_drafts/*.wav
+pipeline/projects/**/_drafts/*.webm
 
 # Raw clips (large, re-gatherable)
 clips/raw/
+clips/approved/*.mp4
+clips/approved/*.mov
+clips/approved/*.mkv
+
+# Archived generated media
+_archive/outputs/
+_archive/clips/
+_archive/**/*.mp4
+_archive/**/*.mov
+_archive/**/*.m4a
+_archive/**/*.mp3
+_archive/**/*.wav
+_archive/**/*.webm
 
 # Temp / work directories
 pipeline/work/
@@ -47,3 +73,9 @@ pipeline/work/
 
 # Logs
 *.log
+
+# Browser automation logs
+.playwright-mcp/
+
+# Loose video files at repo root
+*.mp4

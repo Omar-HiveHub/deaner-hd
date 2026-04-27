@@ -163,15 +163,18 @@ for KEY in ANTHROPIC_API_KEY GEMINI_API_KEY YOUTUBE_DATA_API_KEY; do
 done
 
 if [ ${#MISSING[@]} -gt 0 ]; then
-  warn "Missing keys: ${MISSING[*]}"
-  echo "    Open config/.env in TextEdit and replace 'your_key_here' with your real keys."
-  echo "    See SETUP.md Step 3 for where to get each one."
+  warn "Some keys not yet filled: ${MISSING[*]}"
+  echo "    These are pre-filled by Omar before handoff."
+  echo "    If you're seeing this, message Omar and he'll send the replacement values."
 fi
 
 # ---------------------------------------------------------------------------
 # Step 6 — Final report
 # ---------------------------------------------------------------------------
 step "[6/6] Setup summary"
+
+mkdir -p clips/raw clips/approved pipeline/ideas pipeline/projects pipeline/recorded pipeline/scripted outputs/long-form outputs/shorts voice/transcripts
+ok "Project folders ready"
 
 if [ ${#MISSING[@]} -eq 0 ]; then
   echo

@@ -57,7 +57,7 @@ SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
 
 def _already_transcribed(video_id: str) -> bool:
     """Return True if a transcript for this video_id already exists in TRANSCRIPTS_DIR."""
-    return bool(list(TRANSCRIPTS_DIR.glob(f"*-{video_id}.txt")))
+    return bool(list(TRANSCRIPTS_DIR.rglob(f"*-{video_id}.txt")))
 
 
 # ---------------------------------------------------------------------------

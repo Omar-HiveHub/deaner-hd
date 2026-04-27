@@ -1,123 +1,83 @@
-# Deaner-HD — YouTube Automation System
+# Deaner-HD
 
-This folder contains everything needed to run your hockey commentary channel
-on autopilot. You don't need to be technical to use it day to day.
+This folder is Dean's local video production workspace. Dean can open it in
+Codex or Claude Code, describe the video he wants, approve clips in Finder, drop
+in a voiceover, and ask the agent to assemble the finished edit.
 
----
+For the non-technical workflow, start with [START_HERE.md](START_HERE.md).
 
-## What This System Does
+## What The System Does
 
-1. **Finds video ideas** — polls NHL news feeds, Reddit, and competitor channels
-2. **Writes outlines** — generates a structured script outline in your voice
-3. **Gathers clips** — downloads relevant highlight footage automatically
-4. **Assembles videos** — lays your voiceover over clips and exports a finished file
-5. **Cuts Shorts** — finds the best moments in your long-form video and turns them into 9:16 Shorts with subtitles
-6. **Writes metadata** — generates titles, descriptions, and tags ready to paste into YouTube
-
----
+1. Finds topic ideas from hockey feeds and competitor channels.
+2. Creates one project package per video under `pipeline/projects/`.
+3. Generates scripts and metadata from approved ideas.
+4. Gathers real hockey clips from the approved script cues.
+5. Lets Dean approve raw clips by dragging files in Finder.
+6. Assembles long-form videos with source-diverse hard cuts, voiceover, and an
+   optional low music bed.
+7. Leaves Shorts as a separate later workflow.
 
 ## Folder Guide
 
-| Folder | What it's for |
-|--------|---------------|
-| `pipeline/ideas/` | AI-generated topic suggestions land here as dated markdown files |
-| `pipeline/scripted/` | Approved outlines ready for you to record |
-| `pipeline/recorded/` | Drop your raw voiceover files here after recording |
-| `pipeline/editing/` | Work-in-progress edits live here temporarily |
-| `pipeline/published/` | Move a project here once it's live on YouTube |
-| `voice/scripts/` | Finished scripts you can re-use as style examples |
-| `voice/transcripts/` | Auto-generated transcripts of your recordings |
-| `clips/raw/` | Downloaded highlight clips before approval |
-| `clips/approved/` | Clips you've okayed for use in the video |
-| `outputs/long-form/` | Finished full-length videos ready to upload |
-| `outputs/shorts/` | Finished Shorts (9:16) ready to upload |
-| `config/` | Settings — feed sources, clip sources, API keys |
-| `references/` | Your voice guide, signature phrases, and banned topics |
-| `scripts/` | The automation code (you don't need to touch this) |
+| Folder | What it is for |
+|---|---|
+| `clips/raw/` | Auto-downloaded clips waiting for review |
+| `clips/approved/` | Clips Dean approved for the edit |
+| `pipeline/ideas/` | Topic ideas |
+| `pipeline/scripted/` | Script inbox for fresh Claude/Codex scripts |
+| `pipeline/recorded/` | Voiceovers Dean records |
+| `outputs/long-form/` | Finished long-form videos and delivery notes |
+| `outputs/shorts/` | Finished Shorts |
+| `pipeline/projects/` | One nested package per client video |
+| `voice/transcripts/` | Dean's prior-video transcripts, organized by year |
+| `config/` | API keys, clip sources, SFX/music placeholders |
+| `scripts/` | Automation code |
 
----
+## Agent Workflow
 
-## Day-to-Day Workflow
+Dean can use normal language:
 
-### Step 1 — Get ideas
+```text
+let's start a new video about Matt Rempe
 ```
-cd scripts
-python fetch_ideas.py
+
+The agent should fetch ideas, generate the script and metadata, gather clips
+from the script, tell Dean to approve the keepers, wait for the voiceover, and
+assemble the video.
+
+Key commands still exist for power users:
+
+```bash
+python scripts/fetch_ideas.py --sources-only
+python scripts/generate_script.py --topic "Matt Rempe Rangers Leafs fight" --type incident --project rempe-demo
+python scripts/generate_metadata.py --project rempe-demo
+python scripts/gather_clips.py --project rempe-demo --from-outline --auto --search-provider ytdlp
+python scripts/assemble_video.py --project rempe-demo --title rempe-demo
+python scripts/generate_thumbnail.py --project rempe-demo
 ```
-Ideas land in `pipeline/ideas/` as a dated markdown file. Pick the topic you want to make.
 
-### Step 2 — Gather clips
-```
-python gather_clips.py --topic "Your chosen topic"
-```
-Clips download to `clips/raw/` with a metadata JSON file alongside each one.
+Project packages use the same date + slug in every final artifact:
+`pipeline/projects/YYYY-MM-DD-topic-slug/script/YYYY-MM-DD-topic-slug-script.md`,
+`metadata/YYYY-MM-DD-topic-slug-metadata.txt`,
+`thumbnail/YYYY-MM-DD-topic-slug-thumbnail-brief.txt`, and
+`exports/YYYY-MM-DD-topic-slug-final.mp4`.
 
-### Step 3 — Approve clips
-Open `clips/raw/` and move the clips you want to use into `clips/approved/`.
-Move the metadata JSON files over too — they travel with the clip.
+## Clip Safety Rules
 
-### Step 4 — Generate the outline
-```
-python generate_outline.py --topic "Your chosen topic"
-```
-The outline is built around the actual clips sitting in `clips/approved/` — not a
-generic script. Each section maps to a real piece of footage. Check `pipeline/scripted/`.
+- New downloads are capped at 2 clips per source video.
+- Clips are 3.0s to 4.9s.
+- Gameplay, Xbox/EA Sports, simulations, podcast panels, fan-reaction hosts,
+  subscribe/like overlays, and creator intro screens are rejected.
+- Relevant game clips are preferred. Relevant player/coach/media interviews and
+  clean graphics are allowed when they serve the story.
+- Assembly never loops b-roll. If clips are not long enough for the voiceover,
+  it exits with a clear error.
+- Final videos must finish the full voiceover naturally. Never cut mid-sentence.
 
-### Step 5 — Record your voiceover
-Record following the outline. Drop the file into `pipeline/recorded/`.
+## Setup
 
-### Step 6 — Assemble the video
-```
-python assemble_video.py
-```
-Lays your voiceover over the approved clips in sequence. Finished video lands in `outputs/long-form/`.
+Run [SETUP.md](SETUP.md) once, then use [START_HERE.md](START_HERE.md) for day
+to day operation.
 
-### Step 7 — Cut Shorts
-```
-python generate_shorts.py --video outputs/long-form/your-video.mp4
-```
-Gemini finds the best moments, the script shows them to you for approval, then cuts
-and formats each one as a 9:16 Short with burned-in subtitles. Lands in `outputs/shorts/`.
-
-### Step 8 — Get metadata
-```
-python generate_metadata.py --video outputs/long-form/your-video.mp4
-```
-Generates 3 title options, a description, and tags in Dean's voice.
-Saved as a `.txt` file next to the video — copy-paste straight into YouTube Studio.
-
----
-
-## First-Time Setup
-
-1. Copy `config/.env.example` to `config/.env`
-2. Fill in your API keys in `config/.env`
-3. Fill in `DEAN.md` with your channel details (do this at the Apr 7 kickoff)
-4. Fill in `references/tone.md` and `references/phrases.md`
-5. Install Python dependencies:
-```
-pip install yt-dlp feedparser google-generativeai anthropic python-dotenv openai-whisper moviepy
-```
-6. Make sure FFmpeg is installed: https://ffmpeg.org/download.html
-
----
-
-## Key Files to Know
-
-| File | Why it matters |
-|------|---------------|
-| `DEAN.md` | The AI reads this every time — keep it up to date |
-| `config/.env` | Your API keys — never share this file |
-| `config/feeds.json` | Add or remove news sources here |
-| `config/clip_sources.json` | Add or remove highlight channels here |
-| `references/tone.md` | Fine-tune how the AI writes in your voice |
-| `references/banned_topics.md` | Things the AI will never suggest |
-
----
-
-## Troubleshooting
-
-- **Script won't run** — make sure you've installed the dependencies and filled in `.env`
-- **Clips won't download** — check that `yt-dlp` is up to date: `pip install -U yt-dlp`
-- **AI output sounds wrong** — update `DEAN.md` and `references/tone.md` with more examples
-- **FFmpeg errors** — confirm FFmpeg is installed and on your PATH: `ffmpeg -version`
+Keep `config/.env`, raw clips, recordings, and rendered media out of Git unless
+you intentionally move to Git LFS.

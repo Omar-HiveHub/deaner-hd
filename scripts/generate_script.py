@@ -4,14 +4,13 @@ generate_script.py — Ready-to-Record Script Generator
 Full workflow:
   1. Accept a topic (and optional hook/type) as CLI input
      OR read the most recent approved idea from pipeline/ideas/
-  2. Scan clips/approved/ — load all approved clip filenames and their
-     sidecar metadata JSON files (written by gather_clips.py)
-  3. Load DEAN.md and reference files as context
-  4. Load 5 sample transcripts from voice/transcripts/ (sorted by view count)
+  2. Load DEAN.md and reference files as context
+  3. Load 5 sample transcripts from voice/transcripts/ (sorted by view count)
      as voice examples — type-matched to the video content type
-  5. Call Claude Sonnet via claude_client.generate_script(), which returns a
+  4. Call Claude Sonnet via claude_client.generate_script(), which returns a
      complete voiceover-ready prose script in Dean's exact speaking voice
-  6. Save the script to pipeline/scripted/YYYY-MM-DD-[slug].md
+     with precise [CLIP:], [INTERVIEW:], and [GRAPHIC:] gather cues
+  5. Save the script to pipeline/scripted/YYYY-MM-DD-[slug].md
 
 The output is a full script Dean can read directly into a microphone — not
 bullet points or a structural outline. It should sound like one of his actual
@@ -28,12 +27,12 @@ Run:
 
 import argparse
 import datetime
-import json
 import re
 from pathlib import Path
 from dotenv import load_dotenv
 
 from utils.claude_client import generate_script, load_context_from_dean_md
+from utils.projects import resolve_project, slugify as project_slugify, write_default_requirements
 
 # ---------------------------------------------------------------------------
 # Config and paths
@@ -44,80 +43,7 @@ load_dotenv(_PROJECT_ROOT / "config" / ".env")
 
 IDEAS_DIR      = _PROJECT_ROOT / "pipeline" / "ideas"
 SCRIPTED_DIR   = _PROJECT_ROOT / "pipeline" / "scripted"
-APPROVED_CLIPS_DIR = _PROJECT_ROOT / "clips" / "approved"
 TODAY = datetime.date.today().isoformat()
-
-CLIP_EXTENSIONS = {".mp4", ".mov", ".mkv"}
-
-
-# ---------------------------------------------------------------------------
-# Approved clip loading
-# ---------------------------------------------------------------------------
-
-def load_approved_clips() -> list[dict]:
-    """
-    Scan clips/approved/ and return a list of clip info dicts.
-
-    For each MP4/MOV/MKV file found, attempts to load the sidecar JSON
-    written by gather_clips.py (same stem, .json extension). If no JSON
-    exists the clip is still included with just its filename.
-
-    Returns:
-        List of dicts, each with at minimum:
-          { "filename": str }
-        Plus any fields from the sidecar JSON if present:
-          { source_url, channel_name, timestamp_start, timestamp_end,
-            topic, downloaded_at }
-        Returns an empty list if clips/approved/ is empty or doesn't exist.
-    """
-    if not APPROVED_CLIPS_DIR.exists():
-        return []
-
-    clips = []
-    for clip_file in sorted(APPROVED_CLIPS_DIR.iterdir()):
-        if clip_file.suffix.lower() not in CLIP_EXTENSIONS:
-            continue
-
-        clip_info = {"filename": clip_file.name}
-
-        metadata_path = clip_file.with_suffix(".json")
-        if metadata_path.exists():
-            try:
-                meta = json.loads(metadata_path.read_text(encoding="utf-8"))
-                clip_info.update(meta)
-            except Exception as e:
-                print(f"[generate_script] Warning: could not read {metadata_path.name}: {e}")
-
-        clips.append(clip_info)
-
-    return clips
-
-
-def format_clips_for_prompt(clips: list[dict]) -> str:
-    """
-    Format the approved clip list into a readable block for the Claude prompt.
-    Lets Claude know exactly which footage is available so [CLIP:] markers
-    can reference real files.
-    """
-    if not clips:
-        return "No approved clips found in clips/approved/. Script clip cues will be descriptive placeholders."
-
-    lines = ["Approved clips available in clips/approved/:"]
-    for i, clip in enumerate(clips, 1):
-        filename = clip.get("filename", "unknown")
-        channel  = clip.get("channel_name", "unknown source")
-        t_start  = clip.get("timestamp_start", "?")
-        t_end    = clip.get("timestamp_end", "?")
-        topic    = clip.get("topic", "")
-
-        line = f"  {i}. {filename} — from {channel}"
-        if t_start != "?" and t_end != "?":
-            line += f" [{t_start}s–{t_end}s]"
-        if topic:
-            line += f" | topic: {topic}"
-        lines.append(line)
-
-    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -125,10 +51,7 @@ def format_clips_for_prompt(clips: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def slugify(text: str) -> str:
-    slug = text.lower()
-    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
-    slug = re.sub(r"\s+", "-", slug.strip())
-    return slug[:60].strip("-")
+    return project_slugify(text)
 
 
 def load_top_idea_from_latest_file() -> tuple[str, str]:
@@ -158,19 +81,24 @@ def load_top_idea_from_latest_file() -> tuple[str, str]:
         return ("", "")
 
 
-def save_script(script_markdown: str, topic: str, topic_type: str) -> Path:
+def save_script(script_markdown: str, topic: str, topic_type: str, project=None) -> Path:
     """
     Save the generated script to pipeline/scripted/YYYY-MM-DD-[slug].md.
 
     Prepends a header with date, topic type, and word count estimate.
     Returns the path to the saved file.
     """
-    SCRIPTED_DIR.mkdir(parents=True, exist_ok=True)
     slug = slugify(topic)
-    output_path = SCRIPTED_DIR / f"{TODAY}-{slug}.md"
+    if project:
+        write_default_requirements(project, topic)
+        output_path = project.script_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        SCRIPTED_DIR.mkdir(parents=True, exist_ok=True)
+        output_path = SCRIPTED_DIR / f"{TODAY}-{slug}.md"
 
     # Estimate word count (strip production markers for the count)
-    spoken_text = re.sub(r"\[(?:CLIP|SFX|VERIFY)[^\]]*\]", "", script_markdown)
+    spoken_text = re.sub(r"\[(?:CLIP|INTERVIEW|GRAPHIC|CARD|VERIFY)[^\]]*\]", "", script_markdown)
     word_count  = len(spoken_text.split())
 
     header = (
@@ -226,6 +154,12 @@ def main():
         action="store_true",
         help="Auto-pick the top idea from the latest pipeline/ideas/ file"
     )
+    parser.add_argument(
+        "--project",
+        type=str,
+        default="",
+        help="Optional project slug/path. Saves to pipeline/projects/YYYY-MM-DD-slug/script/."
+    )
     args = parser.parse_args()
 
     topic      = args.topic
@@ -242,27 +176,25 @@ def main():
     print(f"[generate_script] Type: {topic_type}")
     if hook:
         print(f"[generate_script] Hook: {hook}")
+    project = resolve_project(args.project, seed=topic, create=True)
+    if project:
+        print(f"[generate_script] Project: {project.root}")
 
-    # Load approved clips
-    clips = load_approved_clips()
-    if not clips:
-        print("[generate_script] Warning: no approved clips found in clips/approved/.")
-        print("                   Run gather_clips.py first, then move keepers to clips/approved/.")
-        print("                   Continuing — script will use descriptive [CLIP:] placeholders.")
-    else:
-        print(f"[generate_script] Found {len(clips)} approved clip(s).")
-
-    clips_context = format_clips_for_prompt(clips)
-    topic_with_clips = f"{topic}\n\n{clips_context}"
+    cue_context = (
+        f"{topic}\n\n"
+        "Workflow note: write the script before clips are gathered. Include precise "
+        "[CLIP:], [INTERVIEW:], and [GRAPHIC:] cues that can be searched later. "
+        "Each cue should name the player/team/event/source context clearly."
+    )
 
     try:
-        script = generate_script(topic_with_clips, hook=hook, topic_type=topic_type)
+        script = generate_script(cue_context, hook=hook, topic_type=topic_type)
     except Exception as e:
         print(f"[generate_script] Claude API error: {e}")
         return
 
-    save_script(script, topic, topic_type)
-    print("[generate_script] Done. Check pipeline/scripted/ for your script.")
+    output_path = save_script(script, topic, topic_type, project=project)
+    print(f"[generate_script] Done. Check {output_path.parent}/ for your script.")
 
 
 if __name__ == "__main__":

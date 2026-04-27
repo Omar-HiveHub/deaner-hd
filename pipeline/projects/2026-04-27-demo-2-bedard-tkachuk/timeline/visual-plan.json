@@ -1,0 +1,11 @@
+{
+  "overlays": [
+    {
+      "overlay_image": "assets/scorecards/espn-blackhawks-panthers-final-score.png",
+      "start": 1,
+      "duration": 5,
+      "position": "center_upper",
+      "scale": 0.76
+    }
+  ]
+}

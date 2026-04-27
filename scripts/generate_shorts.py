@@ -46,15 +46,14 @@ Run:
 
 import argparse
 import json
+import math
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-
-import whisper
-
-from utils.gemini_client import detect_moments
 
 # ---------------------------------------------------------------------------
 # Config
@@ -75,6 +74,37 @@ WHISPER_MODEL_SIZE = "base"
 # Output dimensions
 OUTPUT_WIDTH = 1080
 OUTPUT_HEIGHT = 1920
+
+
+def _find_binary(name: str) -> str:
+    found = shutil.which(name)
+    if found:
+        return found
+    for cand in (f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}"):
+        if os.path.exists(cand):
+            return cand
+    raise EnvironmentError(f"{name} not found. Re-run setup.command.")
+
+
+FFMPEG = _find_binary("ffmpeg")
+FFPROBE = _find_binary("ffprobe")
+os.environ["PATH"] = str(Path(FFMPEG).parent) + os.pathsep + os.environ.get("PATH", "")
+
+
+def get_duration(path: Path) -> float:
+    result = subprocess.run(
+        [
+            FFPROBE, "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=nokey=1:noprint_wrappers=1",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr)
+    return float(result.stdout.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -101,12 +131,52 @@ def detect_short_moments(video_path: Path) -> list[dict]:
     """
     print(f"[generate_shorts] Sending video to Gemini for moment detection...")
     try:
+        from utils.gemini_client import detect_moments
         moments = detect_moments(str(video_path))
-        # TODO: validate structure of each moment
-        return moments
+        return validate_moments(moments, get_duration(video_path))
     except Exception as e:
         print(f"[generate_shorts] Moment detection error: {e}")
         raise
+
+
+def validate_moments(moments: list[dict], video_duration: float) -> list[dict]:
+    validated = []
+    for moment in moments:
+        try:
+            start = max(0.0, float(moment["start_seconds"]))
+            end = min(video_duration, float(moment["end_seconds"]))
+            if end <= start:
+                continue
+            if end - start > 34:
+                end = start + 34
+            if end - start < 12:
+                continue
+            validated.append({
+                "start_seconds": round(start, 2),
+                "end_seconds": round(end, 2),
+                "reason": moment.get("reason", "Strong standalone moment"),
+            })
+        except Exception:
+            continue
+    return validated
+
+
+def fallback_moments(video_path: Path, count: int = 3) -> list[dict]:
+    duration = get_duration(video_path)
+    count = max(1, min(count, 3))
+    clip_len = min(30.0, max(18.0, duration / (count + 2)))
+    anchors = [0.14, 0.46, 0.74][:count]
+    moments = []
+    for i, anchor in enumerate(anchors, 1):
+        center = duration * anchor
+        start = max(0.0, min(duration - clip_len, center - clip_len / 2))
+        end = min(duration, start + clip_len)
+        moments.append({
+            "start_seconds": round(start, 2),
+            "end_seconds": round(end, 2),
+            "reason": f"Local fallback moment #{i}; review for hook strength before upload.",
+        })
+    return moments
 
 
 def review_moments(moments: list[dict]) -> list[dict]:
@@ -199,7 +269,7 @@ def cut_and_reframe_clip(
     )
 
     cmd = [
-        "ffmpeg", "-y",
+        FFMPEG, "-y",
         "-ss", str(start_seconds),
         "-to", str(end_seconds),
         "-i", str(source_path),
@@ -247,6 +317,7 @@ def transcribe_clip(clip_path: Path) -> list[dict]:
     """
     print(f"  [whisper] Transcribing {clip_path.name}...")
     try:
+        import whisper
         model = whisper.load_model(WHISPER_MODEL_SIZE)
         result = model.transcribe(str(clip_path), word_timestamps=True, fp16=False, verbose=False)
         words: list[dict] = []
@@ -268,9 +339,9 @@ def generate_ass_subtitles(words: list[dict], output_path: Path):
     Write an ASS subtitle file from word-level timestamps.
 
     Subtitle style:
-      - Each word appears individually (word-by-word highlight)
+      - Short phrase chunks, not tacky word-by-word spam
       - Bold white text with black drop shadow (outline)
-      - Font size: 14 (ASS units — renders visually large on 1080x1920)
+      - Large mobile-readable text
       - Centered horizontally, 20% from the bottom of the frame
       - Margin from bottom: 1920 * 0.20 = 384px
 
@@ -298,7 +369,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,14,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,3,1,2,10,10,384,1
+Style: Default,Arial,70,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,5,2,2,80,80,330,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -312,10 +383,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return f"{h}:{m:02d}:{sec:05.2f}"
 
     lines = [ass_header]
-    for word_data in words:
-        start = seconds_to_ass_time(word_data["start"])
-        end = seconds_to_ass_time(word_data["end"])
-        text = word_data["word"].strip()
+    for chunk in _subtitle_chunks(words):
+        start = seconds_to_ass_time(chunk["start"])
+        end = seconds_to_ass_time(chunk["end"])
+        text = chunk["text"].strip()
         if text:
             lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\b1}}{text}")
 
@@ -340,20 +411,54 @@ def burn_subtitles(clip_path: Path, ass_path: Path, output_path: Path):
         - Check returncode
     """
     print(f"  [subtitles] Burning subtitles into {output_path.name}...")
+    subtitle_filter = f"subtitles=filename='{ass_path.name}'"
     cmd = [
-        "ffmpeg", "-y",
+        FFMPEG, "-y",
         "-i", str(clip_path),
-        "-vf", f"subtitles={str(ass_path)}",
+        "-vf", subtitle_filter,
         "-c:a", "copy",
         str(output_path)
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ass_path.parent))
         if result.returncode != 0:
             print(f"[generate_shorts] FFmpeg subtitle burn error:\n{result.stderr}")
             raise RuntimeError(f"FFmpeg failed with code {result.returncode}")
     except FileNotFoundError:
         raise EnvironmentError("FFmpeg not found. Install from https://ffmpeg.org/download.html")
+
+
+def _subtitle_chunks(words: list[dict]) -> list[dict]:
+    chunks = []
+    current = []
+    for word in words:
+        current.append(word)
+        text = " ".join(w["word"].strip() for w in current)
+        duration = current[-1]["end"] - current[0]["start"]
+        if len(current) >= 5 or duration >= 2.2 or len(text) >= 34:
+            chunks.append({
+                "start": current[0]["start"],
+                "end": current[-1]["end"],
+                "text": _wrap_subtitle_text(text),
+            })
+            current = []
+    if current:
+        text = " ".join(w["word"].strip() for w in current)
+        chunks.append({
+            "start": current[0]["start"],
+            "end": current[-1]["end"],
+            "text": _wrap_subtitle_text(text),
+        })
+    return chunks
+
+
+def _wrap_subtitle_text(text: str) -> str:
+    clean = text.replace("{", "").replace("}", "").upper()
+    words = clean.split()
+    if len(words) <= 3:
+        return clean
+    midpoint = math.ceil(len(words) / 2)
+    return " ".join(words[:midpoint]) + r"\N" + " ".join(words[midpoint:])
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +486,7 @@ def save_short_metadata(output_path: Path, moment: dict, n: int, title: str):
         "end_seconds": moment.get("end_seconds"),
         "duration_seconds": moment.get("end_seconds", 0) - moment.get("start_seconds", 0),
         "suggested_title": f"{title} — Short #{n}",
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     metadata_path = output_path.with_suffix(".json")
     try:
@@ -460,6 +565,27 @@ def main():
         default="video",
         help="Short title slug used in output filenames (default: 'video')"
     )
+    parser.add_argument(
+        "--moments",
+        default="",
+        help="Optional JSON list of moments; skips Gemini detection."
+    )
+    parser.add_argument(
+        "--auto-local",
+        action="store_true",
+        help="Use local fallback moment picking instead of Gemini."
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Approve detected/fallback moments without interactive review."
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=3,
+        help="Number of fallback Shorts to create (default: 3)."
+    )
     args = parser.parse_args()
 
     source_video = Path(args.video)
@@ -467,18 +593,19 @@ def main():
         print(f"[generate_shorts] Video not found: {source_video}")
         sys.exit(1)
 
-    # Step 1 — Moment detection
-    try:
-        moments = detect_short_moments(source_video)
-    except NotImplementedError:
-        print("[generate_shorts] detect_moments() not yet implemented in gemini_client.py")
-        sys.exit(1)
-    except Exception as e:
-        print(f"[generate_shorts] Failed to detect moments: {e}")
-        sys.exit(1)
+    if args.moments:
+        moments = validate_moments(json.loads(args.moments), get_duration(source_video))
+    elif args.auto_local:
+        moments = fallback_moments(source_video, count=args.count)
+    else:
+        try:
+            moments = detect_short_moments(source_video)
+        except Exception as e:
+            print(f"[generate_shorts] Gemini unavailable; using local fallback. ({e})")
+            moments = fallback_moments(source_video, count=args.count)
 
     # Review gate
-    approved_moments = review_moments(moments)
+    approved_moments = moments if args.yes else review_moments(moments)
     if not approved_moments:
         print("[generate_shorts] No moments approved. Exiting.")
         sys.exit(0)

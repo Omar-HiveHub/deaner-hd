@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+from utils.projects import latest_script, resolve_project, write_default_requirements
 
 import anthropic
 
@@ -165,10 +166,13 @@ def main():
     parser = argparse.ArgumentParser(description="Generate a thumbnail brief for a video.")
     parser.add_argument("--video", type=str, help="Path to finished long-form MP4")
     parser.add_argument("--script", type=str, help="Path to a script or transcript file")
+    parser.add_argument("--project", type=str, default="", help="Optional project slug/path")
     args = parser.parse_args()
 
-    if not args.video and not args.script:
-        print("Pass either --video or --script.")
+    project = resolve_project(args.project, create=True)
+
+    if not args.video and not args.script and not project:
+        print("Pass either --video, --script, or --project.")
         sys.exit(1)
 
     # Load script content
@@ -184,6 +188,11 @@ def main():
             sys.exit(1)
         script_text = script_path.read_text(encoding="utf-8")
         output_stem = script_path.stem
+    elif project:
+        script_path = latest_script(project, _PROJECT_ROOT / "pipeline" / "scripted")
+        if script_path and script_path.exists():
+            script_text = script_path.read_text(encoding="utf-8")
+            output_stem = project.slug
 
     if args.video:
         video_path = Path(args.video)
@@ -200,6 +209,10 @@ def main():
             if transcript_path.exists():
                 script_text = transcript_path.read_text(encoding="utf-8")
             else:
+                matches = list(transcripts_dir.rglob(f"{video_path.stem}.txt"))
+                if matches:
+                    script_text = matches[0].read_text(encoding="utf-8")
+            if not script_text:
                 scripted_dir = _PROJECT_ROOT / "pipeline" / "scripted"
                 if scripted_dir.exists():
                     for f in sorted(scripted_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -209,7 +222,12 @@ def main():
     print(f"[generate_thumbnail] Generating brief via Claude Opus 4.7...")
     brief = generate_thumbnail_brief(script_text, video_filename)
 
-    output_path = output_dir / f"{output_stem}-thumbnail-brief.txt"
+    if project:
+        write_default_requirements(project, video_filename or output_stem)
+        output_path = project.thumbnail_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        output_path = output_dir / f"{output_stem}-thumbnail-brief.txt"
     header = (
         f"# Thumbnail brief for: {video_filename or args.script}\n"
         f"# Generated: {datetime.utcnow().isoformat()}\n"

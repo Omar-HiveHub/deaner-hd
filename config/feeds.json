@@ -4,73 +4,117 @@
       "name": "NHL",
       "url": "https://www.youtube.com/@NHL",
       "channel_id": "UCqFMzb-4AUf6WAIbl132QKA",
-      "notes": "Official NHL channel — game highlights, goals of the week, top plays"
+      "notes": "Official highlights, top plays, league storylines"
     },
     {
       "name": "Sportsnet",
       "url": "https://www.youtube.com/@Sportsnet",
       "channel_id": "UCzzkB_R0mRnxgDcQpb3CQkQ",
-      "notes": "Canadian hockey coverage — Canucks-heavy, trades, analysis, Ron MacLean segments"
+      "notes": "Canadian hockey coverage, Canucks/Leafs angles, HNIC clips"
     },
     {
       "name": "TSN",
       "url": "https://www.youtube.com/@TSN",
       "channel_id": "UCc0qFfmIiBEKZbMvVknAToQ",
-      "notes": "Canadian sports network — trade deadline coverage, playoff analysis, Insider Trading"
+      "notes": "Insider Trading, trade rumours, Canadian hockey analysis"
     },
     {
       "name": "ESPN",
       "url": "https://www.youtube.com/@ESPN",
       "channel_id": "UCiWLfSweyRNmLpgEHekhoAg",
-      "notes": "US-side NHL coverage — Stanley Cup segments, US-market team highlights"
+      "notes": "US national NHL storylines"
     },
     {
       "name": "Vancouver Canucks",
       "url": "https://www.youtube.com/@VancouverCanucks",
       "channel_id": "UCbDW9fqJN7PpjSXgLAVPpwg",
-      "notes": "Official Canucks channel — post-game scrums, practice clips, player interviews"
+      "notes": "Canucks interviews, practice clips, official team context"
     },
     {
-      "name": "BarDown",
-      "url": "https://www.youtube.com/@BarDown",
-      "channel_id": "UCkp3TkyuHB7AJblCEBrJHFQ",
-      "notes": "TSN's hockey culture channel — viral plays, deep dives, player features, trend topics"
+      "name": "NHL on ESPN",
+      "url": "https://www.youtube.com/@ESPNNHL",
+      "notes": "NHL-specific ESPN uploads"
     }
   ],
-
   "rss_feeds": [
     {
       "name": "NHL.com News",
       "url": "https://www.nhl.com/rss/news.xml",
-      "notes": "Official NHL news feed — transactions, injury reports, standings updates"
+      "notes": "Official league news",
+      "max_age_hours": 96
+    },
+    {
+      "name": "Canucks Official News",
+      "url": "https://www.nhl.com/canucks/rss/news.xml",
+      "notes": "Official Canucks announcements",
+      "max_age_hours": 168
     },
     {
       "name": "Sportsnet NHL",
-      "url": "https://www.sportsnet.ca/rss/nhl/",
-      "notes": "Sportsnet NHL section — Canadian team coverage, trade rumours, analysis pieces"
+      "url": "https://www.sportsnet.ca/hockey/nhl/feed/",
+      "notes": "Sportsnet NHL articles",
+      "max_age_hours": 96
     },
     {
       "name": "TSN NHL",
       "url": "https://www.tsn.ca/rss/nhl",
-      "notes": "TSN NHL section — trade news, game recaps, power rankings"
+      "notes": "TSN NHL articles",
+      "max_age_hours": 96
     },
     {
       "name": "ESPN NHL",
       "url": "https://www.espn.com/espn/rss/nhl/news",
-      "notes": "ESPN NHL feed — US-market perspective, national storylines"
-    }
-  ],
-
-  "reddit": [
-    {
-      "name": "r/hockey",
-      "url": "https://www.reddit.com/r/hockey/.json?sort=hot&limit=25",
-      "notes": "General NHL discussion — breaking news surfaces here first, fan reactions, viral clips"
+      "notes": "ESPN NHL articles",
+      "max_age_hours": 96
     },
     {
-      "name": "r/canucks",
-      "url": "https://www.reddit.com/r/canucks/.json?sort=hot&limit=25",
-      "notes": "Vancouver Canucks subreddit — local fan sentiment, post-game threads, trade talk"
+      "name": "Google News: Vancouver Canucks",
+      "url": "https://news.google.com/rss/search?q=Vancouver%20Canucks%20when:2d&hl=en-CA&gl=CA&ceid=CA:en",
+      "notes": "Broad Canucks news sweep",
+      "max_age_hours": 72
+    },
+    {
+      "name": "Google News: NHL trade rumours",
+      "url": "https://news.google.com/rss/search?q=NHL%20trade%20rumors%20OR%20trade%20rumours%20when:2d&hl=en-CA&gl=CA&ceid=CA:en",
+      "notes": "Trade rumours and roster movement",
+      "max_age_hours": 72
+    },
+    {
+      "name": "Google News: NHL injuries",
+      "url": "https://news.google.com/rss/search?q=NHL%20injury%20OR%20injuries%20when:2d&hl=en-CA&gl=CA&ceid=CA:en",
+      "notes": "Injury storylines",
+      "max_age_hours": 72
     }
-  ]
+  ],
+  "reddit": [
+    {
+      "name": "r/hockey hot",
+      "url": "https://www.reddit.com/r/hockey/hot.json?limit=35",
+      "notes": "League-wide fan discussion"
+    },
+    {
+      "name": "r/hockey new",
+      "url": "https://www.reddit.com/r/hockey/new.json?limit=35",
+      "notes": "Breaking posts before they are fully upvoted"
+    },
+    {
+      "name": "r/canucks hot",
+      "url": "https://www.reddit.com/r/canucks/hot.json?limit=35",
+      "notes": "Canucks fan sentiment"
+    },
+    {
+      "name": "r/canucks new",
+      "url": "https://www.reddit.com/r/canucks/new.json?limit=35",
+      "notes": "Fresh Canucks posts"
+    },
+    {
+      "name": "r/nhl hot",
+      "url": "https://www.reddit.com/r/nhl/hot.json?limit=25",
+      "notes": "More casual NHL audience trends"
+    }
+  ],
+  "nhl_api": {
+    "teams": ["VAN", "TOR", "EDM", "CGY", "MTL", "OTT", "WPG"],
+    "notes": "Public NHL API schedule context for upcoming Canadian-market games"
+  }
 }

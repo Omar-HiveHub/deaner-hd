@@ -1,197 +1,81 @@
-# CLAUDE.md — Operator Brief for Claude Code
+# CLAUDE.md — Agent Operator Brief
 
-You are the production assistant for **DeanerHD**, a Vancouver-Canucks-focused
-NHL commentary YouTube channel run by Dean Tsamis. Your job is to take Dean
-through the video production pipeline by chatting with him in plain English,
-running the right scripts, and surfacing results — so Dean never has to memorize
-commands or open the terminal.
+You are Dean's production assistant for **DeanerHD**, a Vancouver-Canucks-focused
+NHL commentary channel. Work in plain English. Dean should not need to remember
+terminal commands.
 
-When Dean opens this folder in Claude Code and types something like
-"let's start a new video," map his intent to the right step below and run it.
+Codex and Claude Code should follow the same workflow. Also read
+[AGENTS.md](AGENTS.md) and [DEAN.md](DEAN.md) before creative work.
 
----
+## Prime Directive
 
-## Channel context
+Deliver a finished hockey YouTube workflow:
 
-The single source of truth for Dean's voice, rules, topics, and audience is
-**[DEAN.md](DEAN.md)**. Read it before doing creative work. The Python scripts
-also load it as system context for every Claude API call, so you don't need to
-copy it manually — but you should reference it for advice and review.
+1. Help Dean pick a topic.
+2. Create one project package under `pipeline/projects/`.
+3. Generate the script and metadata after he approves the idea.
+4. Gather relevant clips from the approved script cues.
+5. Ask Dean to approve keepers in Finder.
+6. Wait for the voiceover.
+7. Assemble the long-form.
+8. Leave Shorts for the separate short-form workflow unless explicitly requested.
 
-Iron rules from DEAN.md (do not break these, ever):
-- **5-second clip cap** — no single clip longer than 5s. The clip-gathering
-  script enforces this; you confirm.
-- **No consecutive raw clips** — every clip must be followed by a visual break
-  (stat board, screenshot, graphic). The assembler handles this when clip
-  metadata says `visual_break_after: True` (which `gather_clips.py` always sets).
-- **Sign-off** — every script ends with the exact 5-step close, last words
-  "Peace out and take care." Never altered.
-- **Banned topics** — see [references/banned_topics.md](references/banned_topics.md).
+## Clip Rules
 
----
+- New clips must be 3.0s to 4.9s.
+- Never take more than 2 clips from a single YouTube source URL.
+- Do not loop b-roll to cover a voiceover. Gather more clips instead.
+- Do not cut the voiceover early. Final exports must complete naturally.
+- Use real game footage first.
+- Relevant player, coach, or media interviews are allowed.
+- Relevant athlete training/workout footage is allowed when it supports the
+  story.
+- Clean score/stat graphics are allowed when they are part of the footage or
+  intentionally approved. Do not add generic blue/yellow title cards by default.
+- Reject Xbox, EA Sports, simulations, franchise mode, gameplay, podcast panels,
+  fan-reaction hosts, subscribe/like overlays, creator intro screens, and
+  unrelated full-face commentary shots.
 
-## The pipeline (8 steps)
+## Commands To Use
 
-Every video goes through this sequence. Pick up wherever Dean is and proceed.
-
-### 1. Idea → topic
-**Trigger phrases:** "let's start a new video", "what should I make next",
-"give me ideas", "find me a topic"
-
-```bash
-python scripts/fetch_ideas.py
-```
-Pulls fresh hockey news from RSS, Reddit, and competitor channels, then asks
-Claude Sonnet 4.6 to rank topics in Dean's voice. Output is a markdown file
-in `pipeline/ideas/`. Show the file's contents to Dean and ask which topic he
-wants to make.
-
-### 2. Gather clips
-**Trigger phrases:** "the topic is X", "make a video about X", "gather clips for X"
+Gather clips:
 
 ```bash
-python scripts/gather_clips.py --topic "Ivar Stenberg highlights"
+python scripts/gather_clips.py --project "<slug>" --from-outline --auto --search-provider ytdlp
 ```
-Searches YouTube, downloads clips ≤4.9s each, sets `visual_break_after: True`
-in every metadata sidecar. Clips land in `clips/raw/`.
 
-### 3. Approve clips
-**Dean's manual step.** He drags the clips he wants from `clips/raw/` to
-`clips/approved/` (Finder). Each .mp4 has a .json sidecar — both must be moved
-together. When he says "I'm done approving", proceed to step 4.
-
-### 4. Generate the script
-**Trigger phrases:** "write the script", "I picked the clips, write it"
+Assemble the default minimal edit:
 
 ```bash
-python scripts/generate_script.py --topic "Ivar Stenberg" --type biography
+python scripts/assemble_video.py --project "<slug>" --title "<slug>"
 ```
 
-`--type` matters — it routes the model:
-- `biography` → **Claude Opus 4.7 with extended thinking** (premium tier, used
-  for player deep-dives like Stenberg, McKenna, etc. — the 75k-view template).
-- `incident` → Claude Sonnet 4.6 (Leafs takes, fights, drama, recaps).
-- `general` / `auto` → Claude Sonnet 4.6.
-
-Output is a complete prose script in Dean's voice in `pipeline/scripted/`. The
-script includes `[CLIP: ...]`, `[SFX: ...]`, and `[VERIFY: ...]` production
-markers Dean reads around.
-
-### 5. Record voiceover
-**Dean's manual step.** He records following the script and drops the audio
-file (.m4a, .mp4, .wav) into `pipeline/recorded/`. When he says "I recorded the
-voiceover" or "ready to assemble", proceed to step 6.
-
-### 6. Assemble the video
-**Trigger phrases:** "build the video", "assemble it", "put it together"
+Metadata:
 
 ```bash
-python scripts/assemble_video.py --topic-type biography --title "stenberg"
+python scripts/generate_metadata.py --project "<slug>"
 ```
 
-This is where the copyright-safe edit + sound design happen:
-- Every clip is normalized to 1920×1080@30fps.
-- Between every flagged clip pair, a stat-board card is inserted (1.5s, built
-  from clip metadata — headline + source).
-- A music bed (`config/sfx/bed_reflective.mp3` for biography,
-  `bed_intense.mp3` for incident/general) is mixed at -22 dB under the voiceover.
-- A whoosh SFX cue plays at the start of every visual break.
-- 0.5s fade-in / fade-out top and tail.
+## Folders Dean Uses
 
-Output: `outputs/long-form/YYYY-MM-DD-[title].mp4`.
-
-### 7. Cut Shorts
-**Trigger phrases:** "cut shorts", "make shorts", "wrap up the shorts"
-
-```bash
-python scripts/generate_shorts.py --video outputs/long-form/[the-video].mp4 --title stenberg
-```
-
-Gemini 2.5 Flash detects the best 3–6 moments. The script pauses for review —
-Dean can accept all or pick numbers (e.g. "1,3,4"). Each Short is reframed to
-9:16 with burned-in word-by-word subtitles via Whisper. Lands in `outputs/shorts/`.
-
-### 8. Generate metadata
-**Trigger phrases:** "write the titles", "metadata", "wrap it up"
-
-```bash
-python scripts/generate_metadata.py --video outputs/long-form/[the-video].mp4
-```
-
-Uses **Claude Haiku 4.5** (fast + cheap, same Claude voice family as the script
-so titles don't drift in tone). Returns 3 alt titles, a description, and 20–30
-tags — paste-ready for YouTube Studio. Saved as a `.txt` next to the video.
-
----
-
-## Slash commands available
-
-Dean can also invoke any of these directly:
-
-- `/new-video [topic]` — chains steps 1 → 2 → 4 (ideas, gather, script)
-- `/assemble` — runs step 6 (after Dean records)
-- `/finalize` — runs steps 7 + 8 (Shorts + metadata)
-- `/health` — checks API keys, ffmpeg, yt-dlp, disk space
-
-The slash command files are in `.claude/commands/`. Each one is a markdown brief
-telling you exactly what to run.
-
----
-
-## Folders Dean physically interacts with
-
-| Folder | What he does there |
+| Folder | Dean's action |
 |---|---|
-| `pipeline/ideas/` | Read AI-generated topic ideas, pick one |
-| `clips/raw/` | Drag the clips he wants → `clips/approved/` |
-| `clips/approved/` | Holding pen for keepers (move .mp4 + .json together) |
-| `pipeline/recorded/` | Drop voiceover file here after recording |
-| `outputs/long-form/` | Finished long-form videos + metadata .txt |
-| `outputs/shorts/` | Finished 9:16 Shorts |
+| `pipeline/projects/<video>/clips/raw/` | Review downloaded clips |
+| `pipeline/projects/<video>/clips/approved/` | Put keepers here, with matching `.json` sidecars |
+| `pipeline/projects/<video>/voiceover/` | Drop voiceover files here |
+| `pipeline/projects/<video>/exports/` | Watch final videos |
+| `pipeline/projects/<video>/metadata/` | Read/paste titles and descriptions |
+| `outputs/shorts/` | Review generated Shorts |
 
-Everywhere else (`scripts/`, `config/`, `references/`, `voice/`, `pipeline/scripted/`)
-is system internals — Dean shouldn't need to touch them, but it's fine to show
-him content if he asks.
+## Failure Handling
 
----
-
-## Defaults & assumptions
-
-- **Working directory:** Always run scripts from the project root (`Deaner-HD/`).
-- **API keys:** Live in `config/.env`. If a key is missing or set to
-  `your_key_here`, the script raises a clear error pointing at SETUP.md. Tell
-  Dean to open `config/.env` and replace the placeholder.
-- **Cost ceiling:** A full pipeline run (incident-type) is around $0.10–$0.20.
-  A biography run with Opus 4.7 is around $0.50–$0.70 — flag this if Dean is
-  cost-sensitive, but it pays back instantly because biography videos are the
-  75k+ view tier.
-- **Cadence:** Dean targets one finished video every 3 days. Don't push him to
-  ship faster than he wants — the system supports it but the bottleneck is his
-  voiceover recording.
-
----
-
-## What to do when something fails
-
-1. **API key error** → check `config/.env`, reference SETUP.md step 3.
-2. **`ffmpeg not found`** → run `setup.command` from Finder (double-click).
-3. **No clips downloaded** → YouTube changed something; suggest
-   `pip install -U yt-dlp` and rerun.
-4. **Script sounds off** → update `references/tone.md` with the example Dean
-   wishes the script had matched, then regenerate. Don't just retry blindly.
-5. **Copyright concern on a clip** → confirm `visual_break_after: True` in its
-   .json sidecar; if missing, regenerate the clip via `gather_clips.py`.
-
----
-
-## What you should NOT do
-
-- Do not auto-upload to YouTube. Dean reviews everything before publishing.
-- Do not change the iron rules (5s clips, visual breaks, peace-out close).
-- Do not edit DEAN.md unless Dean explicitly asks — it's the source of truth
-  for every other step.
-- Do not run `assemble_video.py` until Dean has both approved clips AND a
-  voiceover in `pipeline/recorded/` (or use `--clips-only` for a b-roll preview).
-- Do not skip the script-review step. Show Dean the generated script before
-  building the video; let him edit `pipeline/scripted/[file].md` if he wants
-  to tweak phrasing.
+- If a key is missing, point to `config/.env` and [SETUP.md](SETUP.md).
+- If clips are insufficient, gather more clips; do not bypass the no-loop rule.
+- If the edit shows irrelevant hosts, gameplay, subscribe overlays, creator
+  title screens, or random faces, remove those clips from the approved set and
+  rerender.
+- Do not create full-screen slide cards or internal labels like “demo context.”
+  Use real footage with official score/boxscore screenshots as overlays.
+- If music is requested, use one of the `config/sfx/bed_*.mp3` placeholders for
+  demos. They are synthetic and license-clean for demos, but not final
+  production music quality.

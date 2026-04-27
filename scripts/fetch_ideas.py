@@ -18,9 +18,12 @@ Output:
     pipeline/ideas/2026-04-04-ideas.md  (date-stamped)
 """
 
+import calendar
 import os
 import json
 import datetime
+import re
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -29,8 +32,6 @@ import requests  # for Reddit JSON scraping
 
 # YouTube Data API — used to check competitor channels
 from googleapiclient.discovery import build  # pip install google-api-python-client
-
-from utils.claude_client import generate_ideas
 
 # ---------------------------------------------------------------------------
 # Config and paths
@@ -45,6 +46,7 @@ IDEAS_OUTPUT_DIR = _PROJECT_ROOT / "pipeline" / "ideas"
 COMPETITORS_CONFIG = _PROJECT_ROOT / "config" / "competitors.json"
 
 TODAY = datetime.date.today().isoformat()
+NOW_UTC = datetime.datetime.now(datetime.timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -85,14 +87,24 @@ def poll_rss_feeds(rss_feeds: list[dict]) -> list[dict]:
         - Return flat list sorted by published date descending
     """
     results = []
+    max_age_hours = 96
     for feed in rss_feeds:
         try:
             parsed = feedparser.parse(feed["url"])
-            # TODO: filter by date, extract fields, append to results
-            pass
+            for entry in parsed.entries[: feed.get("limit", 20)]:
+                published_dt = _entry_datetime(entry)
+                if published_dt and _age_hours(published_dt) > feed.get("max_age_hours", max_age_hours):
+                    continue
+                results.append({
+                    "title": _clean_text(entry.get("title", "")),
+                    "link": entry.get("link", ""),
+                    "summary": _clean_text(entry.get("summary", "")),
+                    "source": feed.get("name", ""),
+                    "published": published_dt.isoformat() if published_dt else entry.get("published", ""),
+                })
         except Exception as e:
             print(f"[fetch_ideas] RSS error for {feed['name']}: {e}")
-    return results
+    return sorted(results, key=lambda item: item.get("published", ""), reverse=True)
 
 
 def scrape_reddit(reddit_sources: list[dict], limit: int = 25) -> list[dict]:
@@ -119,11 +131,72 @@ def scrape_reddit(reddit_sources: list[dict], limit: int = 25) -> list[dict]:
         try:
             resp = requests.get(source["url"], headers=headers, timeout=10)
             resp.raise_for_status()
-            # TODO: parse JSON and extract posts
-            pass
+            data = resp.json()
+            for child in data.get("data", {}).get("children", []):
+                post = child.get("data", {})
+                title = _clean_text(post.get("title", ""))
+                if not title or post.get("stickied"):
+                    continue
+                created = datetime.datetime.fromtimestamp(
+                    post.get("created_utc", 0), tz=datetime.timezone.utc
+                )
+                results.append({
+                    "title": title,
+                    "url": post.get("url_overridden_by_dest") or f"https://reddit.com{post.get('permalink', '')}",
+                    "permalink": f"https://reddit.com{post.get('permalink', '')}",
+                    "score": int(post.get("score") or 0),
+                    "subreddit": post.get("subreddit", source.get("name", "")),
+                    "num_comments": int(post.get("num_comments") or 0),
+                    "created": created.isoformat(),
+                })
         except Exception as e:
             print(f"[fetch_ideas] Reddit error for {source['name']}: {e}")
-    return results
+    return sorted(results, key=lambda post: (post.get("score", 0), post.get("num_comments", 0)), reverse=True)
+
+
+def check_youtube_channels(channels: list[dict], hours: int = 96, max_results: int = 5) -> list[dict]:
+    """
+    Check recent uploads from configured YouTube channels.
+    """
+    if not YOUTUBE_API_KEY:
+        print("[fetch_ideas] No YOUTUBE_DATA_API_KEY — skipping YouTube checks")
+        return []
+
+    results = []
+    published_after = (NOW_UTC - datetime.timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
+    try:
+        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        for channel in channels:
+            try:
+                channel_id = channel.get("channel_id") or resolve_channel_id(youtube, channel)
+                if not channel_id:
+                    continue
+                request = youtube.search().list(
+                    part="snippet",
+                    channelId=channel_id,
+                    type="video",
+                    order="date",
+                    maxResults=max_results,
+                    publishedAfter=published_after,
+                )
+                response = request.execute()
+                for item in response.get("items", []):
+                    snippet = item.get("snippet", {})
+                    video_id = item.get("id", {}).get("videoId")
+                    if not video_id:
+                        continue
+                    results.append({
+                        "title": _clean_text(snippet.get("title", "")),
+                        "channel": snippet.get("channelTitle") or channel.get("name", ""),
+                        "published_at": snippet.get("publishedAt", ""),
+                        "video_url": f"https://www.youtube.com/watch?v={video_id}",
+                        "niche": channel.get("niche") or channel.get("notes", ""),
+                    })
+            except Exception as e:
+                print(f"[fetch_ideas] YouTube API error for {channel.get('name')}: {e}")
+    except Exception as e:
+        print(f"[fetch_ideas] YouTube API setup error: {e}")
+    return sorted(results, key=lambda item: item.get("published_at", ""), reverse=True)
 
 
 def check_competitor_uploads(competitors: list[dict]) -> list[dict]:
@@ -146,21 +219,62 @@ def check_competitor_uploads(competitors: list[dict]) -> list[dict]:
         - Call search.list(channelId=..., order=date, maxResults=5)
         - Return videos published in the last 72 hours
     """
-    if not YOUTUBE_API_KEY:
-        print("[fetch_ideas] No YOUTUBE_DATA_API_KEY — skipping competitor check")
-        return []
+    return check_youtube_channels(competitors, hours=168, max_results=4)
 
+
+def resolve_channel_id(youtube, channel: dict) -> str:
+    """Resolve a YouTube channel ID from a configured URL/handle/name."""
+    url = channel.get("url", "")
+    handle_match = re.search(r"youtube\.com/@([^/?]+)", url)
+    if handle_match:
+        try:
+            response = youtube.channels().list(
+                part="id",
+                forHandle=handle_match.group(1),
+            ).execute()
+            items = response.get("items", [])
+            if items:
+                return items[0].get("id", "")
+        except Exception:
+            pass
+
+    response = youtube.search().list(
+        part="snippet",
+        q=channel.get("name", ""),
+        type="channel",
+        maxResults=1,
+    ).execute()
+    items = response.get("items", [])
+    return items[0].get("snippet", {}).get("channelId", "") if items else ""
+
+
+def fetch_nhl_schedule_context(config: dict) -> list[dict]:
+    """Fetch upcoming schedule context from the public NHL web API."""
     results = []
-    try:
-        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-        for competitor in competitors:
-            try:
-                # TODO: query YouTube API for recent uploads from this channel
-                pass
-            except Exception as e:
-                print(f"[fetch_ideas] YouTube API error for {competitor.get('name')}: {e}")
-    except Exception as e:
-        print(f"[fetch_ideas] YouTube API setup error: {e}")
+    nhl_api = config.get("nhl_api", {})
+    teams = nhl_api.get("teams", ["VAN"])
+    for team in teams:
+        try:
+            resp = requests.get(
+                f"https://api-web.nhle.com/v1/club-schedule/{team}/week/now",
+                timeout=12,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            for game in data.get("games", []):
+                game_date = game.get("gameDate", "")
+                away = game.get("awayTeam", {}).get("abbrev", "")
+                home = game.get("homeTeam", {}).get("abbrev", "")
+                state = game.get("gameState", "")
+                results.append({
+                    "team": team,
+                    "date": game_date,
+                    "matchup": f"{away} at {home}",
+                    "state": state,
+                    "venue": game.get("venue", {}).get("default", ""),
+                })
+        except Exception as e:
+            print(f"[fetch_ideas] NHL schedule error for {team}: {e}")
     return results
 
 
@@ -168,7 +282,13 @@ def check_competitor_uploads(competitors: list[dict]) -> list[dict]:
 # Content assembly + AI call
 # ---------------------------------------------------------------------------
 
-def assemble_raw_content(rss_items: list, reddit_posts: list, competitor_videos: list) -> str:
+def assemble_raw_content(
+    rss_items: list,
+    reddit_posts: list,
+    youtube_videos: list,
+    competitor_videos: list,
+    schedule_items: list,
+) -> str:
     """
     Combine all sourced content into a single text block for Claude.
     """
@@ -176,22 +296,34 @@ def assemble_raw_content(rss_items: list, reddit_posts: list, competitor_videos:
 
     if rss_items:
         lines = ["## NHL News"]
-        for item in rss_items:
-            lines.append(f"- [{item.get('title', '')}]({item.get('link', '')})")
+        for item in rss_items[:40]:
+            lines.append(f"- [{item.get('title', '')}]({item.get('link', '')}) — {item.get('source', '')}")
             if item.get("summary"):
                 lines.append(f"  {item['summary'][:200]}")
         sections.append("\n".join(lines))
 
     if reddit_posts:
         lines = ["## Reddit Trending"]
-        for post in reddit_posts:
+        for post in reddit_posts[:40]:
             lines.append(f"- [{post.get('title', '')}] ({post.get('score', 0)} upvotes, r/{post.get('subreddit', '')})")
+        sections.append("\n".join(lines))
+
+    if youtube_videos:
+        lines = ["## Official/News YouTube Uploads"]
+        for vid in youtube_videos[:40]:
+            lines.append(f"- [{vid.get('title', '')}]({vid.get('video_url', '')}) — {vid.get('channel', '')}")
         sections.append("\n".join(lines))
 
     if competitor_videos:
         lines = ["## Competitors Recently Uploaded"]
-        for vid in competitor_videos:
-            lines.append(f"- {vid.get('title', '')} — {vid.get('channel', '')}")
+        for vid in competitor_videos[:40]:
+            lines.append(f"- [{vid.get('title', '')}]({vid.get('video_url', '')}) — {vid.get('channel', '')}")
+        sections.append("\n".join(lines))
+
+    if schedule_items:
+        lines = ["## Schedule Context"]
+        for item in schedule_items:
+            lines.append(f"- {item.get('date', '')}: {item.get('matchup', '')} ({item.get('state', '')})")
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections) if sections else "No content fetched."
@@ -225,6 +357,43 @@ def save_ideas(ideas_markdown: str, output_dir: Path) -> Path:
     return output_path
 
 
+def save_source_report(raw_content: str, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{TODAY}-source-report.md"
+    header = f"# Source Report — {TODAY}\n\nGenerated before AI ranking so Dean can see what was checked.\n\n"
+    output_path.write_text(header + raw_content, encoding="utf-8")
+    print(f"[fetch_ideas] Source report saved to {output_path}")
+    return output_path
+
+
+def _entry_datetime(entry) -> datetime.datetime | None:
+    for key in ("published_parsed", "updated_parsed"):
+        parsed = entry.get(key)
+        if parsed:
+            return datetime.datetime.fromtimestamp(calendar.timegm(parsed), tz=datetime.timezone.utc)
+    for key in ("published", "updated"):
+        raw = entry.get(key)
+        if raw:
+            try:
+                dt = parsedate_to_datetime(raw)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                return dt.astimezone(datetime.timezone.utc)
+            except Exception:
+                continue
+    return None
+
+
+def _age_hours(dt: datetime.datetime) -> float:
+    return (NOW_UTC - dt.astimezone(datetime.timezone.utc)).total_seconds() / 3600
+
+
+def _clean_text(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -247,6 +416,11 @@ def main():
         type=str,
         default="",
         help="Path to a text file to use as raw content instead of live scraping."
+    )
+    parser.add_argument(
+        "--sources-only",
+        action="store_true",
+        help="Fetch sources and save a source report without calling Claude."
     )
     args = parser.parse_args()
 
@@ -274,11 +448,25 @@ def main():
 
         rss_items = poll_rss_feeds(feeds.get("rss_feeds", []))
         reddit_posts = scrape_reddit(feeds.get("reddit", []))
+        youtube_videos = check_youtube_channels(feeds.get("youtube_channels", []))
         competitor_videos = check_competitor_uploads(competitors)
-        raw_content = assemble_raw_content(rss_items, reddit_posts, competitor_videos)
+        schedule_items = fetch_nhl_schedule_context(feeds)
+        raw_content = assemble_raw_content(
+            rss_items,
+            reddit_posts,
+            youtube_videos,
+            competitor_videos,
+            schedule_items,
+        )
+
+    if args.sources_only:
+        save_source_report(raw_content, IDEAS_OUTPUT_DIR)
+        print("[fetch_ideas] Done (sources only).")
+        return
 
     print("[fetch_ideas] Sending to Claude for idea generation...")
     try:
+        from utils.claude_client import generate_ideas
         ideas_markdown = generate_ideas(raw_content)
     except Exception as e:
         print(f"[fetch_ideas] Claude API error: {e}")

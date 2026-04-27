@@ -114,16 +114,16 @@
 
 ## Workflow
 
-The confirmed 8-step production flow for every video:
+The confirmed production flow for every video:
 
-1. **Fetch ideas** — run `fetch_ideas.py` to pull latest NHL news and trending content. Pick the topic from `pipeline/ideas/`.
-2. **Gather clips** — run `gather_clips.py --topic "..."`. Clips download to `clips/raw/`.
-3. **Approve clips** — move keepers to `clips/approved/`. Everything else stays in raw.
-4. **Generate script** — run `generate_script.py --topic "..." --type incident|biography`. Output lands in `pipeline/scripted/`. Produces a complete ready-to-record prose script in Dean's voice — not bullet points.
-5. **Record voiceover** — record following the outline. Drop file into `pipeline/recorded/`.
-6. **Assemble video** — run `assemble_video.py`. Exports to `outputs/long-form/`.
-7. **Generate Shorts** — run `generate_shorts.py`. Gemini detects moments, clips reframed to 9:16, subtitled. Output: `outputs/shorts/`.
-8. **Generate metadata** — run `generate_metadata.py`. 3 title options, description, tags. Output: `outputs/long-form/[video]-metadata.txt`.
+1. **Fetch ideas** — pull latest NHL news, Reddit, YouTube, competitor uploads, and schedule context. Pick the topic from `pipeline/ideas/`.
+2. **Create project package** — one folder under `pipeline/projects/YYYY-MM-DD-slug/` for script, metadata, clips, voiceover, notes, thumbnail brief, and exports.
+3. **Generate script and metadata** — write the ready-to-record prose script first, with `[CLIP:]`, `[INTERVIEW:]`, and `[GRAPHIC:]` cues. Metadata can be generated from the script before rendering.
+4. **Gather clips from the script** — run the gatherer with `--project <slug> --from-outline --auto` so visuals match the approved script.
+5. **Approve clips** — move keepers plus matching `.json` sidecars from the project `clips/raw/` to project `clips/approved/`.
+6. **Record voiceover** — record the approved script and drop the file into the project `voiceover/`.
+7. **Assemble video** — export the final MP4 to the project `exports/`. The full voiceover must complete naturally; never cut mid-sentence.
+8. **Finalize package** — generate final metadata, thumbnail brief, and proof notes. Shorts are a later separate workflow, not automatic long-form cuts.
 
 ---
 
@@ -132,15 +132,17 @@ The confirmed 8-step production flow for every video:
 - No automated way to find topic ideas — manually scrolling Twitter/Reddit currently
 - Clip sourcing is manual — have to find highlights on YouTube, download separately
 - Metadata generation takes too long — writing titles and descriptions from scratch every video
-- No Shorts workflow — ideas die because cutting and subtitling manually takes too long
+- Shorts workflow is parked for later — future Shorts should use separate 20-30 second scripts, not raw long-form cuts
 - Low CTR from poor thumbnails — high-quality, focused thumbnails with compelling text are a known gap
 - Copyright claims from consecutive clips — clips stacked back-to-back trigger claims even at 5s each. Fix: alternate clips with stat boards, screenshots, or other visual breaks
 
 ## Copyright Rules (CRITICAL)
 
 - **5-second rule:** No single clip longer than 5 seconds
-- **No consecutive clips:** Never stack clips directly together — always break them up with a stat board, player screenshot, or graphic
-- **Varied visuals:** Mix in pop-ups (stats, player photos, overlaid text) throughout to both confuse the copyright detector and improve viewer experience
+- **No looping:** Never loop b-roll under a long voiceover
+- **Source diversity:** Avoid adjacent same-source clips whenever possible
+- **Varied visuals:** Mix real game footage with relevant interviews, training/workout footage, official scorecards, rankings, stats, and screenshots
+- **Rejected visuals:** No gameplay, simulations, fan hosts, podcast panels, subscribe/like overlays, creator title cards, random faces, or visible watermarks when avoidable
 
 ---
 

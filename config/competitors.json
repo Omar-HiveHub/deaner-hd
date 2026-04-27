@@ -1,11 +1,38 @@
 [
-  // Schema: { "name": string, "url": string, "niche": string, "notes": string }
-  // Add competitor channels here after the Apr 7 kickoff session.
-  // Example:
-  // {
-  //   "name": "Channel Name",
-  //   "url": "https://www.youtube.com/@channelhandle",
-  //   "niche": "e.g. Canucks analysis, NHL trade talk",
-  //   "notes": "What they do well, gaps Dean can exploit, upload frequency"
-  // }
+  {
+    "name": "The Hockey Guy",
+    "url": "https://www.youtube.com/@TheHockeyGuy",
+    "niche": "NHL-wide reaction and daily storylines",
+    "notes": "Useful for spotting league-wide topics Dean can localize or disagree with."
+  },
+  {
+    "name": "Graviteh",
+    "url": "https://www.youtube.com/@GravitehHockey",
+    "niche": "NHL news, rankings, trades, playoff storylines",
+    "notes": "Good signal for broad NHL topics with strong YouTube packaging."
+  },
+  {
+    "name": "Eck",
+    "url": "https://www.youtube.com/@Eckhockey",
+    "niche": "NHL news and quick-hit commentary",
+    "notes": "Tracks fast-moving stories and viral player moments."
+  },
+  {
+    "name": "Canucks Conversation",
+    "url": "https://www.youtube.com/@CanucksConversation",
+    "niche": "Canucks talk and local Vancouver narratives",
+    "notes": "Local sentiment and Canucks-specific debate topics."
+  },
+  {
+    "name": "Sekeres and Price",
+    "url": "https://www.youtube.com/@SekeresandPrice",
+    "niche": "Vancouver sports talk",
+    "notes": "Useful for Canucks market chatter, rumours, and radio-style topics."
+  },
+  {
+    "name": "Locked On Canucks",
+    "url": "https://www.youtube.com/@LockedOnCanucks",
+    "niche": "Daily Canucks commentary",
+    "notes": "Daily topic velocity; use for ideas, not visual clip sourcing."
+  }
 ]

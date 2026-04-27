@@ -36,14 +36,7 @@ import anthropic
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_PROJECT_ROOT / "config" / ".env")
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your_key_here":
-    raise EnvironmentError(
-        "ANTHROPIC_API_KEY not set. Open config/.env and replace the placeholder "
-        "with your real Anthropic API key (starts with sk-ant-...)."
-    )
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+client = anthropic.Anthropic()
 
 # Model routing
 SONNET_MODEL   = "claude-sonnet-4-6"
@@ -131,7 +124,7 @@ def _load_sample_scripts(n: int = 5, topic_type: str = "auto") -> str:
         return ""
 
     entries = []
-    for f in TRANSCRIPTS_DIR.glob("*.txt"):
+    for f in TRANSCRIPTS_DIR.rglob("*.txt"):
         try:
             text = f.read_text(encoding="utf-8")
             title = _get_transcript_title(text)
@@ -375,12 +368,17 @@ OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Write continuous prose in Dean's speaking voice. No section headers. No bullet lists.
-Use these production markers as standalone lines Dean reads around — do not narrate them:
-  [CLIP: brief description]     ← insert b-roll footage here
-  [SFX: brief description]      ← insert sound effect here (whoosh, hit, stinger, riser)
+Use these production markers as standalone lines Dean reads around — do not narrate them.
+Make them precise because the clip gatherer searches YouTube from these cues after
+the script is approved:
+  [CLIP: searchable real-game visual, include players/teams/event]
+  [INTERVIEW: searchable player/coach/media interview cue if relevant]
+  [GRAPHIC: scorecard/stat/ranking/screenshot cue to hold longer than action]
   [VERIFY: claim or stat]       ← Dean fact-checks this before recording
 
 Target: 500–700 words of spoken content (4–6 minutes at Dean's natural pace).
+Do not write subscribe/like callouts, creator intro screens, or "full clip coming up"
+language. The edit should feel like Dean's normal commentary, not a template.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DEAN'S VOICE RULES

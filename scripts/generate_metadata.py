@@ -22,8 +22,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-
-from utils.claude_client import generate_metadata as claude_generate_metadata
+from utils.projects import latest_script, resolve_project, write_default_requirements
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_PROJECT_ROOT / "config" / ".env")
@@ -40,6 +39,9 @@ def get_video_summary(video_path: Path) -> str:
     transcript_path = transcripts_dir / f"{video_path.stem}.txt"
     if transcript_path.exists():
         return transcript_path.read_text(encoding="utf-8")[:3000]
+    matches = list(transcripts_dir.rglob(f"{video_path.stem}.txt"))
+    if matches:
+        return matches[0].read_text(encoding="utf-8")[:3000]
 
     scripted_dir = _PROJECT_ROOT / "pipeline" / "scripted"
     if scripted_dir.exists():
@@ -51,11 +53,16 @@ def get_video_summary(video_path: Path) -> str:
     return ""
 
 
-def save_metadata(metadata: str, video_path: Path) -> Path:
-    output_path = video_path.parent / f"{video_path.stem}-metadata.txt"
+def save_metadata(metadata: str, target_path: Path, project=None) -> Path:
+    if project:
+        write_default_requirements(project)
+        output_path = project.metadata_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        output_path = target_path.parent / f"{target_path.stem}-metadata.txt"
     header = (
-        f"# Metadata for: {video_path.name}\n"
-        f"# Generated: {datetime.utcnow().isoformat()}\n"
+        f"# Metadata for: {target_path.name}\n"
+        f"# Generated: {datetime.now().isoformat()}\n"
         f"# Model: Claude Haiku 4.5\n\n"
     )
     output_path.write_text(header + metadata, encoding="utf-8")
@@ -67,21 +74,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate YouTube titles, description, and tags for a finished video."
     )
-    parser.add_argument(
-        "--video", type=str, required=True,
-        help="Path to the finished long-form MP4 in outputs/long-form/"
-    )
+    parser.add_argument("--video", type=str, default="", help="Path to the finished long-form MP4")
     parser.add_argument(
         "--script", type=str, default=None,
-        help="Optional path to a script or transcript file to use as content. "
-             "If omitted, auto-discovers from voice/transcripts/ or pipeline/scripted/."
+        help="Optional path to a script/transcript. Can be used before video render."
+    )
+    parser.add_argument(
+        "--project", type=str, default="",
+        help="Optional project slug/path. Reads project script and saves to project metadata folder."
     )
     args = parser.parse_args()
-
-    video_path = Path(args.video)
-    if not video_path.exists():
-        print(f"[generate_metadata] Video not found: {video_path}")
-        sys.exit(1)
+    project = resolve_project(args.project, create=True)
 
     if args.script:
         script_path = Path(args.script)
@@ -89,14 +92,31 @@ def main():
             print(f"[generate_metadata] Script not found: {script_path}")
             sys.exit(1)
         summary = script_path.read_text(encoding="utf-8")[:3000]
+        target_path = script_path
+    elif project:
+        script_path = latest_script(project, _PROJECT_ROOT / "pipeline" / "scripted")
+        if not script_path or not script_path.exists():
+            print(f"[generate_metadata] No project script found in {project.script_dir}")
+            sys.exit(1)
+        summary = script_path.read_text(encoding="utf-8")[:3000]
+        target_path = script_path
     else:
+        if not args.video:
+            print("[generate_metadata] Pass --script before render, or --video after render.")
+            sys.exit(1)
+        video_path = Path(args.video)
+        if not video_path.exists():
+            print(f"[generate_metadata] Video not found: {video_path}")
+            sys.exit(1)
         summary = get_video_summary(video_path)
+        target_path = video_path
         if not summary:
             print(f"[generate_metadata] No transcript or script found — using filename hint only.")
 
     print(f"[generate_metadata] Generating metadata via Claude Haiku 4.5...")
-    metadata = claude_generate_metadata(summary, video_filename=video_path.name)
-    output_path = save_metadata(metadata, video_path)
+    from utils.claude_client import generate_metadata as claude_generate_metadata
+    metadata = claude_generate_metadata(summary, video_filename=target_path.name)
+    output_path = save_metadata(metadata, target_path, project=project)
     print(f"[generate_metadata] Done. Open {output_path} to copy-paste into YouTube Studio.")
 
 

@@ -1,0 +1,11 @@
+{
+  "overlays": [
+    {
+      "overlay_image": "assets/scorecards/espn-rangers-leafs-final-score.png",
+      "start": 16,
+      "duration": 5.5,
+      "position": "center_upper",
+      "scale": 0.76
+    }
+  ]
+}

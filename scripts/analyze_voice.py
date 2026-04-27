@@ -71,7 +71,7 @@ def load_all_transcripts() -> list[dict]:
         return []
 
     records = []
-    for f in TRANSCRIPTS_DIR.glob("*.txt"):
+    for f in TRANSCRIPTS_DIR.rglob("*.txt"):
         try:
             raw = f.read_text(encoding="utf-8")
         except Exception as e:
