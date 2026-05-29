@@ -1,31 +1,14 @@
-# Deaner-HD Python dependencies
-# Install with: pip install -r requirements.txt
-# (setup.command does this for you on Dean's machine)
+# DeanerHD simplified production kit dependencies
+# Install with: python3 -m pip install -r requirements.txt
 
-# Anthropic Claude SDK — supports prompt caching, Opus 4.7 thinking, Haiku 4.5
+# AI generation for outlines/scripts/metadata when using the wrapper scripts
 anthropic>=0.40.0,<1.0.0
 
-# Google Gemini SDK — used for Shorts moment detection in finished videos
-google-generativeai>=0.8.0,<1.0.0
-
-# YouTube clip download
+# Clip/search workflow
 yt-dlp>=2026.3.17
-
-# RSS / Reddit feed parsing for fetch_ideas
 feedparser>=6.0.10
+requests>=2.31.0
+google-api-python-client>=2.120.0
 
-# .env loader — reads config/.env
+# Config loading
 python-dotenv>=1.0.0
-
-# Whisper for word-level subtitle timing on Shorts
-openai-whisper>=20240930
-
-# Pillow — used by assemble_video.py to render visual break cards
-Pillow>=10.0.0
-
-# Optional fallback for some video ops (assemble uses ffmpeg directly)
-moviepy>=1.0.3
-
-# Required for whisper torch backend
-# (whisper installs torch transitively, but pinning here avoids version drift)
-torch>=2.0.0

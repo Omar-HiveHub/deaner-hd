@@ -5,16 +5,16 @@ Generates titles, description, and tags in Dean's voice for a finished video.
 Uses Claude Haiku 4.5 (fast + cheap, same voice family as the script).
 
 Workflow:
-  1. Accept a path to a finished video in outputs/long-form/
-  2. Locate matching transcript (voice/transcripts/) or script (pipeline/scripted/)
+  1. Accept a script, transcript, or project folder.
+  2. Locate matching transcript in 03_Reference/transcripts/ or a project outline/script.
   3. Pass the script/transcript to claude_client.generate_metadata()
-  4. Save output as .txt next to the video — paste-ready for YouTube Studio
+  4. Save output as `03_metadata.txt` in the project package.
 
 Run:
-    python generate_metadata.py --video outputs/long-form/2026-04-26-stenberg.mp4
+    python3 scripts/dean.py metadata 2026-05-29-topic-slug
 
 Output:
-    outputs/long-form/2026-04-26-stenberg-metadata.txt
+    02_Projects/2026-05-29-topic-slug/03_metadata.txt
 """
 
 import argparse
@@ -31,19 +31,24 @@ load_dotenv(_PROJECT_ROOT / "config" / ".env")
 def get_video_summary(video_path: Path) -> str:
     """
     Find the best content summary for the given video, in priority order:
-      1. Matching transcript at voice/transcripts/[stem].txt
-      2. Matching script at pipeline/scripted/*[stem]*.md
+      1. Matching transcript at 03_Reference/transcripts/[stem].txt
+      2. Matching reference script content
       3. Empty string (Claude falls back to filename hint)
     """
-    transcripts_dir = _PROJECT_ROOT / "voice" / "transcripts"
+    transcripts_dir = _PROJECT_ROOT / "03_Reference" / "transcripts"
+    legacy_transcripts_dir = _PROJECT_ROOT / "03_Reference" / "transcripts"
     transcript_path = transcripts_dir / f"{video_path.stem}.txt"
     if transcript_path.exists():
         return transcript_path.read_text(encoding="utf-8")[:3000]
     matches = list(transcripts_dir.rglob(f"{video_path.stem}.txt"))
     if matches:
         return matches[0].read_text(encoding="utf-8")[:3000]
+    if legacy_transcripts_dir.exists():
+        legacy_matches = list(legacy_transcripts_dir.rglob(f"{video_path.stem}.txt"))
+        if legacy_matches:
+            return legacy_matches[0].read_text(encoding="utf-8")[:3000]
 
-    scripted_dir = _PROJECT_ROOT / "pipeline" / "scripted"
+    scripted_dir = _PROJECT_ROOT / "03_Reference" / "past-scripts"
     if scripted_dir.exists():
         stem_tail = video_path.stem.split("-", 3)[-1] if "-" in video_path.stem else video_path.stem
         for outline_file in scripted_dir.glob("*.md"):
@@ -94,7 +99,7 @@ def main():
         summary = script_path.read_text(encoding="utf-8")[:3000]
         target_path = script_path
     elif project:
-        script_path = latest_script(project, _PROJECT_ROOT / "pipeline" / "scripted")
+        script_path = latest_script(project, _PROJECT_ROOT / "03_Reference" / "past-scripts")
         if not script_path or not script_path.exists():
             print(f"[generate_metadata] No project script found in {project.script_dir}")
             sys.exit(1)

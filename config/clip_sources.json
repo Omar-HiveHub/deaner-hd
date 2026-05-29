@@ -44,6 +44,27 @@
     }
   ],
 
+  "reddit_subreddits": [
+    {
+      "name": "r/hockey",
+      "url": "https://www.reddit.com/r/hockey",
+      "copyright_note": "User-posted clips on Reddit are typically sourced from official broadcasts. Same fair dealing rules apply — short clips for commentary use only.",
+      "notes": "Fastest source for breaking clips (Streamable, v.redd.it). Often posts incident clips hours before YouTube channels upload them."
+    },
+    {
+      "name": "r/canucks",
+      "url": "https://www.reddit.com/r/canucks",
+      "copyright_note": "Same as r/hockey — user-posted broadcast clips under fair dealing.",
+      "notes": "Canucks-specific clips, fan reactions, local beat coverage"
+    },
+    {
+      "name": "r/nhl",
+      "url": "https://www.reddit.com/r/nhl",
+      "copyright_note": "Same as r/hockey.",
+      "notes": "Broader NHL clips, league-wide incidents and highlights"
+    }
+  ],
+
   "screen_record_sources": [
     {
       "name": "NHL.com",

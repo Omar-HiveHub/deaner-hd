@@ -3,10 +3,10 @@
 When Dean asks for ideas this week, the agent should run:
 
 ```bash
-python scripts/fetch_ideas.py --sources-only
+python3 scripts/dean.py ideas
 ```
 
-This creates `pipeline/ideas/YYYY-MM-DD-source-report.md` so Dean can see what
+This creates `01_Ideas/YYYY-MM-DD-source-report.md` so Dean can see what
 was checked before any AI ranking happens.
 
 ## Live Sources
@@ -33,5 +33,4 @@ was checked before any AI ranking happens.
 - upcoming games that can be previewed before demand peaks,
 - competitor uploads that prove a topic is already moving.
 
-The goal is speed: catch the topic while people are starting to search, then
-write Dean's angle before the market is saturated.
+The goal is speed: catch the topic while people are starting to search, then write Dean's angle before the market is saturated.

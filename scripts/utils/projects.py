@@ -1,8 +1,8 @@
 """
 Shared project package helpers for Deaner-HD.
 
-Project packages keep one video's script, metadata, clips, voiceover, exports,
-and proof notes together so Dean does not need to remember loose filenames.
+Project packages keep one video's outline, metadata, and clips together so Dean
+does not need to navigate a technical folder tree.
 """
 
 from __future__ import annotations
@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROJECTS_DIR = PROJECT_ROOT / "pipeline" / "projects"
+PROJECTS_DIR = PROJECT_ROOT / "02_Projects"
+CLIPS_DIR = PROJECT_ROOT / "clips"
+LEGACY_PROJECTS_DIR = PROJECT_ROOT / "pipeline" / "projects"
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -29,17 +31,14 @@ class ProjectPaths:
     slug: str
     script_dir: Path
     metadata_dir: Path
-    thumbnail_dir: Path
     notes_dir: Path
     raw_clips_dir: Path
-    approved_clips_dir: Path
-    voiceover_dir: Path
-    exports_dir: Path
     drafts_dir: Path
     assets_dir: Path
     scorecards_dir: Path
     screenshots_dir: Path
     timeline_dir: Path
+    simple_layout: bool = False
 
     @property
     def package_slug(self) -> str:
@@ -47,35 +46,32 @@ class ProjectPaths:
 
     @property
     def script_path(self) -> Path:
+        if self.simple_layout:
+            return self.root / "01_outline.md"
         return self.script_dir / f"{self.package_slug}-script.md"
 
     @property
     def metadata_path(self) -> Path:
+        if self.simple_layout:
+            return self.root / "03_metadata.txt"
         return self.metadata_dir / f"{self.package_slug}-metadata.txt"
 
     @property
-    def thumbnail_path(self) -> Path:
-        return self.thumbnail_dir / f"{self.package_slug}-thumbnail-brief.txt"
-
-    @property
     def requirements_path(self) -> Path:
+        if self.simple_layout:
+            return self.root / "00_READ_ME.md"
         return self.notes_dir / f"{self.package_slug}-requirements.md"
 
     @property
     def proof_path(self) -> Path:
         return self.notes_dir / f"{self.package_slug}-proof.md"
 
-    @property
-    def final_video_path(self) -> Path:
-        return self.exports_dir / f"{self.package_slug}-final.mp4"
-
-
 def resolve_project(project: str | Path | None, seed: str = "video", create: bool = False) -> ProjectPaths | None:
     """
     Resolve a project slug or path to the canonical package shape.
 
     - Existing absolute/relative paths are used directly.
-    - Bare slugs are created under pipeline/projects/YYYY-MM-DD-slug unless
+    - Bare slugs are created under 02_Projects/YYYY-MM-DD-slug unless
       a matching package already exists.
     - Returns None when no project was requested so callers can keep flat
       backwards-compatible behavior.
@@ -88,46 +84,47 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
     slug_seed = slugify(project_text or seed)
 
     raw_path = Path(project_text).expanduser()
-    if raw_path.is_absolute() or raw_path.parts[:2] == ("pipeline", "projects") or "/" in project_text:
+    is_path = (
+        raw_path.is_absolute()
+        or raw_path.parts[:2] in {("pipeline", "projects"), ("02_Projects",)}
+        or "/" in project_text
+    )
+    if is_path:
         root = raw_path if raw_path.is_absolute() else PROJECT_ROOT / raw_path
         slug = slugify(root.name.removeprefix(f"{today}-"))
     else:
+        exact_root = PROJECTS_DIR / project_text
         matches = sorted(PROJECTS_DIR.glob(f"*-{slug_seed}"))
-        root = matches[-1] if matches else PROJECTS_DIR / f"{today}-{slug_seed}"
+        if not matches and LEGACY_PROJECTS_DIR.exists():
+            matches = sorted(LEGACY_PROJECTS_DIR.glob(f"*-{slug_seed}"))
+        root = exact_root if exact_root.exists() else (matches[-1] if matches else PROJECTS_DIR / f"{today}-{slug_seed}")
         slug = slug_seed
 
+    simple_layout = PROJECTS_DIR in root.parents or root == PROJECTS_DIR or root.parts[:1] == ("02_Projects",)
     paths = ProjectPaths(
         root=root,
         slug=slug,
-        script_dir=root / "script",
-        metadata_dir=root / "metadata",
-        thumbnail_dir=root / "thumbnail",
-        notes_dir=root / "notes",
-        raw_clips_dir=root / "clips" / "raw",
-        approved_clips_dir=root / "clips" / "approved",
-        voiceover_dir=root / "voiceover",
-        exports_dir=root / "exports",
+        script_dir=root if simple_layout else root / "script",
+        metadata_dir=root if simple_layout else root / "metadata",
+        notes_dir=root if simple_layout else root / "notes",
+        raw_clips_dir=CLIPS_DIR / root.name / "raw" if simple_layout else root / "clips" / "raw",
         drafts_dir=root / "_drafts",
-        assets_dir=root / "assets",
-        scorecards_dir=root / "assets" / "scorecards",
-        screenshots_dir=root / "assets" / "screenshots",
-        timeline_dir=root / "timeline",
+        assets_dir=root / "source_assets" if simple_layout else root / "assets",
+        scorecards_dir=root / "source_assets" / "scorecards" if simple_layout else root / "assets" / "scorecards",
+        screenshots_dir=root / "source_assets" / "screenshots" if simple_layout else root / "assets" / "screenshots",
+        timeline_dir=root / "timeline" if simple_layout else root / "timeline",
+        simple_layout=simple_layout,
     )
 
     if create:
-        for directory in (
+        directories = [
             paths.script_dir,
             paths.metadata_dir,
-            paths.thumbnail_dir,
-            paths.notes_dir,
             paths.raw_clips_dir,
-            paths.approved_clips_dir,
-            paths.voiceover_dir,
-            paths.exports_dir,
-            paths.scorecards_dir,
-            paths.screenshots_dir,
-            paths.timeline_dir,
-        ):
+        ]
+        if not paths.simple_layout:
+            directories.extend([paths.scorecards_dir, paths.screenshots_dir])
+        for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
 
     return paths
@@ -135,6 +132,16 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
 
 def latest_script(project: ProjectPaths | None, fallback_dir: Path) -> Path | None:
     if project:
+        if project.simple_layout:
+            candidates = []
+            for name in ("01_outline.md", "02_script.md"):
+                path = project.root / name
+                if path.exists():
+                    text = path.read_text(encoding="utf-8", errors="ignore").strip()
+                    if text and "Use this only when a word-for-word script is requested" not in text:
+                        candidates.append(path)
+            if candidates:
+                return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
         if project.script_path.exists():
             return project.script_path
         files = sorted(project.script_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -148,23 +155,38 @@ def write_default_requirements(project: ProjectPaths, title: str = "") -> None:
     if project.requirements_path.exists():
         return
     topic = title or project.slug.replace("-", " ")
-    project.requirements_path.write_text(
-        f"# Requirements: {topic}\n\n"
-        "## Workflow\n"
-        "1. Script and metadata are generated before clip gathering.\n"
-        "2. Clips are gathered from script cues, then manually approved.\n"
-        "3. Voiceover must complete naturally; never cut mid-sentence.\n"
-        "4. Final export lives in this package's `exports/` folder.\n\n"
-        "## Visual Rules\n"
-        "- Use real game footage, relevant interviews, and relevant training/workout clips.\n"
-        "- Use official scorecards, standings, rankings, and stat screenshots only when they support the audio.\n"
-        "- Reject gameplay, simulations, fan hosts, podcast panels, subscribe/like overlays, creator title cards, and unrelated faces.\n"
-        "- Avoid visible watermarks by rejecting the clip or cropping/zooming when the shot still works.\n"
-        "- Keep edits minimal: hard cuts, light music under voiceover, no tacky CTA graphics.\n\n"
-        "## Final Checks\n"
-        "- Full audio completed.\n"
-        "- No b-roll looping.\n"
-        "- No abrupt ending.\n"
-        "- No adjacent same-source clips when avoidable.\n",
-        encoding="utf-8",
-    )
+    if project.simple_layout:
+        project.requirements_path.write_text(
+            f"# Project: {topic}\n\n"
+            "## Status\n\n"
+            "- Outline: not started\n"
+            "- Metadata: not started\n"
+            "- Clips gathered: not started\n"
+            "- Final edit: manual in Dean's editor\n\n"
+            "## Simple Workflow\n\n"
+            "1. Write or approve `01_outline.md`.\n"
+            "2. Gather clips into the matching folder under `clips/`.\n"
+            "3. Use `04_clip_cue_sheet.csv` and the gathered clips for manual editing.\n"
+            "4. Use `03_metadata.txt` for upload copy.\n\n"
+            "## Promise\n\n"
+            "This folder is an edit-ready production package. Final editing is manual.\n",
+            encoding="utf-8",
+        )
+    else:
+        project.requirements_path.write_text(
+            f"# Requirements: {topic}\n\n"
+            "## Workflow\n"
+            "1. Script and metadata are generated before clip gathering.\n"
+            "2. Clips are gathered from script cues, then manually approved.\n"
+            "3. Voiceover must complete naturally; never cut mid-sentence.\n"
+            "4. Final export lives in this package's `exports/` folder.\n\n"
+            "## Visual Rules\n"
+            "- Use real game footage, relevant interviews, and relevant training/workout clips.\n"
+            "- Reject gameplay, simulations, fan hosts, podcast panels, subscribe/like overlays, creator title cards, and unrelated faces.\n\n"
+            "## Final Checks\n"
+            "- Full audio completed.\n"
+            "- No b-roll looping.\n"
+            "- No abrupt ending.\n"
+            "- No adjacent same-source clips when avoidable.\n",
+            encoding="utf-8",
+        )

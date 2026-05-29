@@ -25,9 +25,14 @@ Functions exposed to other scripts:
 
 import os
 import re
+import json
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 import anthropic
+
+# Local claude CLI binary (authenticated via Claude Code, no API key needed)
+_CLAUDE_LOCAL = Path.home() / ".claude" / "local" / "claude"
 
 # ---------------------------------------------------------------------------
 # Environment setup
@@ -45,10 +50,12 @@ HAIKU_MODEL    = "claude-haiku-4-5"
 
 # File paths
 DEAN_MD_PATH       = _PROJECT_ROOT / "DEAN.md"
-TONE_MD_PATH       = _PROJECT_ROOT / "references" / "tone.md"
-PHRASES_MD_PATH    = _PROJECT_ROOT / "references" / "phrases.md"
-BANNED_TOPICS_PATH = _PROJECT_ROOT / "references" / "banned_topics.md"
-TRANSCRIPTS_DIR    = _PROJECT_ROOT / "voice" / "transcripts"
+REFERENCE_DIR      = _PROJECT_ROOT / "03_Reference"
+LEGACY_REFERENCE_DIR = _PROJECT_ROOT / "references"
+TONE_MD_PATH       = REFERENCE_DIR / "channel-notes" / "tone.md"
+PHRASES_MD_PATH    = REFERENCE_DIR / "channel-notes" / "phrases.md"
+BANNED_TOPICS_PATH = REFERENCE_DIR / "channel-notes" / "banned_topics.md"
+TRANSCRIPTS_DIR    = REFERENCE_DIR / "transcripts"
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +124,7 @@ def _classify_transcript(title: str) -> str:
 
 def _load_sample_scripts(n: int = 5, topic_type: str = "auto") -> str:
     """
-    Load n top-performing transcripts from voice/transcripts/ as voice examples.
+    Load n top-performing transcripts from 03_Reference/transcripts/ as voice examples.
     Sorts by VIEW COUNT so highest-leverage videos anchor the style.
     """
     if not TRANSCRIPTS_DIR.exists():
@@ -344,9 +351,9 @@ Format as a numbered markdown list. Put the best idea first.
 # Public API — generate_script
 # ---------------------------------------------------------------------------
 
-def generate_script(topic: str, hook: str = "", topic_type: str = "auto") -> str:
+def generate_script(topic: str, hook: str = "", topic_type: str = "auto", output_format: str = "outline") -> str:
     """
-    Generate a complete ready-to-record voiceover script in Dean's voice.
+    Generate a Dean-ready outline or complete voiceover script.
 
     Routing:
       topic_type == "biography" → Opus 4.7 with extended thinking (premium tier)
@@ -359,24 +366,44 @@ def generate_script(topic: str, hook: str = "", topic_type: str = "auto") -> str
         context        = load_context_from_dean_md()
         sample_scripts = _load_sample_scripts(n=5, topic_type=topic_type)
 
-        system_text = f"""You are writing a complete, ready-to-record voiceover script in the exact speaking voice of Dean Tsamis (DeanerHD on YouTube) — a hockey commentary creator with 400+ videos and a deeply consistent on-camera voice.
+        outline_mode = output_format != "script"
+        product_label = "outline" if outline_mode else "script"
 
-The script will be handed directly to Dean to read into a microphone. It must sound like him speaking naturally — the conversational, run-on, thought-out-loud style you hear in the sample transcripts below. Not bullet points. Not formal prose. Not a structured document. His actual voice.
+        system_text = f"""You are writing a DeanerHD {product_label} in the exact speaking voice and workflow style of Dean Tsamis (DeanerHD on YouTube) — a hockey commentary creator with 400+ videos and a deeply consistent on-camera voice.
+
+Dean normally records from rough outlines, not polished teleprompter copy. The default deliverable should help him improvise naturally: strong hooks, section beats, searchable visual cues, fact-check notes, and CTA options. Only write word-for-word prose when the caller explicitly asks for `output_format="script"`.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Write continuous prose in Dean's speaking voice. No section headers. No bullet lists.
-Use these production markers as standalone lines Dean reads around — do not narrate them.
-Make them precise because the clip gatherer searches YouTube from these cues after
-the script is approved:
+For outline mode, use this exact structure:
+
+# Outline: [working title]
+
+## Hook Options
+1. Three punchy Dean-style hook lines, each one sentence.
+
+## Section 1: [short beat name]
+[CLIP: searchable real-game visual, include players/teams/event]
+- 3-5 Dean-style talking beats he can improvise from.
+- Include [VERIFY: claim or stat] next to any claim that needs fact checking.
+
+Repeat 4-6 sections total. Use [INTERVIEW:] and [GRAPHIC:] cues where relevant.
+
+## CTA Options
+- 3 specific comment questions tied to the video subject.
+- Include Dean's locked ending sequence as a reminder, not as scripted narration.
+
+For script mode, write continuous prose in Dean's speaking voice. No bullet lists in spoken content.
+Use these production markers as standalone lines Dean reads around — do not narrate them. Make them precise because the clip gatherer searches YouTube from these cues after the outline/script is approved:
   [CLIP: searchable real-game visual, include players/teams/event]
   [INTERVIEW: searchable player/coach/media interview cue if relevant]
   [GRAPHIC: scorecard/stat/ranking/screenshot cue to hold longer than action]
   [VERIFY: claim or stat]       ← Dean fact-checks this before recording
 
-Target: 500–700 words of spoken content (4–6 minutes at Dean's natural pace).
+Target for outline mode: enough beats for a 4–6 minute recording without forcing a word-for-word read.
+Target for script mode: 500–700 words of spoken content (4–6 minutes at Dean's natural pace).
 Do not write subscribe/like callouts, creator intro screens, or "full clip coming up"
 language. The edit should feel like Dean's normal commentary, not a template.
 
@@ -399,7 +426,19 @@ SAMPLE TRANSCRIPTS — study these and match this voice exactly
 {sample_scripts if sample_scripts else "(No samples available — rely on the voice rules above.)"}
 """
 
-        user_message = f"""Write a complete voiceover-ready script for a video about:
+        if outline_mode:
+            user_message = f"""Write a Dean-ready recording outline for a video about:
+
+Topic: {topic}
+{"Opening hook direction: " + hook if hook else ""}
+Video type: {topic_type}
+
+Use the kickoff-call workflow: Dean picks a topic, reviews an outline, gathers clips from precise cues, then records from the outline in his own voice.
+Do not write a full word-for-word script. Give him hooks, section beats, clip/search cues, stat/graphic cues, verification notes, and CTA options.
+The outline must still sound like Dean's thinking style: conversational, direct, measured, and hockey-specific.
+"""
+        else:
+            user_message = f"""Write a complete voiceover-ready script for a video about:
 
 Topic: {topic}
 {"Opening hook: " + hook if hook else ""}
@@ -414,7 +453,7 @@ Do not use bullet points or section headers anywhere in the spoken content.
         # Route by topic type
         if topic_type == "biography":
             # Opus 4.7 with extended thinking — better story arcs for the 75k-view tier
-            print(f"[claude_client] Routing biography → Opus 4.7 (premium tier)")
+            print(f"[claude_client] Routing biography {product_label} → Opus 4.7 (premium tier)")
             response = client.messages.create(
                 model=OPUS_MODEL,
                 max_tokens=8192,
@@ -423,7 +462,7 @@ Do not use bullet points or section headers anywhere in the spoken content.
                 messages=[{"role": "user", "content": user_message}],
             )
         else:
-            print(f"[claude_client] Routing {topic_type} → Sonnet 4.6")
+            print(f"[claude_client] Routing {topic_type} {product_label} → Sonnet 4.6")
             response = client.messages.create(
                 model=SONNET_MODEL,
                 max_tokens=4096,
@@ -533,9 +572,82 @@ Each title: 50–70 characters. SELECTIVE caps on 1–2 emotional words only.
 
 
 # ---------------------------------------------------------------------------
+# Public API — score_clip_relevance
+# ---------------------------------------------------------------------------
+
+def score_clip_relevance(candidates: list[dict], cue_description: str) -> list[float]:
+    """
+    Score a batch of clip candidates (0-10) against a specific clip cue.
+
+    Uses keyword-overlap scoring: counts how many meaningful words from the cue
+    appear in each video's title, description, channel, URL, and source fields.
+    Words are weighted by type:
+      - Event terms (worlds, iihf, championship, quarterfinal, injury, ejected…) → 3pts
+      - Action terms (hit, fight, goal, replay, bench, reaction…) → 2pts
+      - General nouns (player names already extracted by caller) → 1pt
+
+    No API key or subprocess needed — deterministic and fast.
+
+    Args:
+        candidates: List of dicts with title/description/channel/url/source keys.
+        cue_description: The exact [CLIP: ...] cue text from the outline.
+
+    Returns:
+        List of float scores (0–10), one per candidate, in input order.
+    """
+    if not candidates:
+        return []
+
+    _EVENT_TERMS = {
+        "worlds", "world", "iihf", "championship", "quarterfinal", "semifinal",
+        "final", "tournament", "international", "olympics", "olympic",
+        "injury", "injured", "ejected", "ejection", "suspension", "suspended",
+        "penalty", "banned", "misconduct",
+    }
+    _ACTION_TERMS = {
+        "hit", "fight", "goal", "replay", "reaction", "bench", "response",
+        "knockout", "knocked", "dirty", "brutal", "illegal", "cheap",
+        "highlights", "highlight", "moment", "collision",
+    }
+
+    def _score_one(candidate: dict) -> float:
+        searchable_text = " ".join(
+            str(candidate.get(key, ""))
+            for key in ("title", "description", "channel", "url", "source_provider", "content_type")
+        ).lower()
+        searchable_words = set(re.sub(r"[^\w\s]", " ", searchable_text).split())
+        cue_words = re.sub(r"[^\w\s]", " ", cue_description.lower()).split()
+        cue_words = [w for w in cue_words if len(w) >= 3]
+
+        raw = 0.0
+        max_possible = 0.0
+        for w in cue_words:
+            if w in _EVENT_TERMS:
+                max_possible += 3
+                if w in searchable_words or w in searchable_text:
+                    raw += 3
+            elif w in _ACTION_TERMS:
+                max_possible += 2
+                if w in searchable_words or w in searchable_text:
+                    raw += 2
+            else:
+                max_possible += 1
+                if w in searchable_words or w in searchable_text:
+                    raw += 1
+
+        if max_possible == 0:
+            return 5.0
+        ratio = raw / max_possible
+        # Scale: 0 overlap → 0, full overlap → 10, partial scaled in between
+        return round(min(10.0, ratio * 10.0), 1)
+
+    return [_score_one(c) for c in candidates]
+
+
+# ---------------------------------------------------------------------------
 # Legacy alias — keeps existing callers working
 # ---------------------------------------------------------------------------
 
 def generate_outline(topic: str, hook: str = "", topic_type: str = "auto") -> str:
-    """Alias for generate_script(). Kept for backwards compatibility."""
-    return generate_script(topic, hook=hook, topic_type=topic_type)
+    """Generate Dean's preferred hook + section-beat outline."""
+    return generate_script(topic, hook=hook, topic_type=topic_type, output_format="outline")

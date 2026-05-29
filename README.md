@@ -1,83 +1,60 @@
-# Deaner-HD
+# DeanerHD Production Kit
 
-This folder is Dean's local video production workspace. Dean can open it in
-Codex or Claude Code, describe the video he wants, approve clips in Finder, drop
-in a voiceover, and ask the agent to assemble the finished edit.
+This repo is now a simplified local production assistant for DeanerHD. It no
+longer promises upload-ready automated edits. The retained value is ideas,
+outlines/scripts, metadata, clip gathering, and clean edit-ready project folders.
 
-For the non-technical workflow, start with [START_HERE.md](START_HERE.md).
+Dean-facing instructions live in [START_HERE.md](START_HERE.md).
 
-## What The System Does
+## Active Folder Guide
 
-1. Finds topic ideas from hockey feeds and competitor channels.
-2. Creates one project package per video under `pipeline/projects/`.
-3. Generates scripts and metadata from approved ideas.
-4. Gathers real hockey clips from the approved script cues.
-5. Lets Dean approve raw clips by dragging files in Finder.
-6. Assembles long-form videos with source-diverse hard cuts, voiceover, and an
-   optional low music bed.
-7. Leaves Shorts as a separate later workflow.
-
-## Folder Guide
-
-| Folder | What it is for |
+| Folder | Purpose |
 |---|---|
-| `clips/raw/` | Auto-downloaded clips waiting for review |
-| `clips/approved/` | Clips Dean approved for the edit |
-| `pipeline/ideas/` | Topic ideas |
-| `pipeline/scripted/` | Script inbox for fresh Claude/Codex scripts |
-| `pipeline/recorded/` | Voiceovers Dean records |
-| `outputs/long-form/` | Finished long-form videos and delivery notes |
-| `outputs/shorts/` | Finished Shorts |
-| `pipeline/projects/` | One nested package per client video |
-| `voice/transcripts/` | Dean's prior-video transcripts, organized by year |
-| `config/` | API keys, clip sources, SFX/music placeholders |
-| `scripts/` | Automation code |
+| `01_Ideas/` | Source reports and topic ideas |
+| `02_Projects/` | One folder per video |
+| `03_Reference/` | Dean's transcripts, tone notes, phrases, source references |
+| `config/` | Setup notes, source lists, and system config |
+| `scripts/` | Automation scripts and the simple `dean.py` wrapper |
 
-## Agent Workflow
+## Simple Wrapper
 
-Dean can use normal language:
-
-```text
-let's start a new video about Matt Rempe
-```
-
-The agent should fetch ideas, generate the script and metadata, gather clips
-from the script, tell Dean to approve the keepers, wait for the voiceover, and
-assemble the video.
-
-Key commands still exist for power users:
+Use this wrapper for the handoff workflow:
 
 ```bash
-python scripts/fetch_ideas.py --sources-only
-python scripts/generate_script.py --topic "Matt Rempe Rangers Leafs fight" --type incident --project rempe-demo
-python scripts/generate_metadata.py --project rempe-demo
-python scripts/gather_clips.py --project rempe-demo --from-outline --auto --search-provider ytdlp
-python scripts/assemble_video.py --project rempe-demo --title rempe-demo
-python scripts/generate_thumbnail.py --project rempe-demo
+python3 scripts/dean.py ideas
+python3 scripts/dean.py new "topic name"
+python3 scripts/dean.py outline <project>
+python3 scripts/dean.py gather <project>
+python3 scripts/dean.py gather <project> --section "hit replay"
+python3 scripts/dean.py metadata <project>
+python3 scripts/dean.py package <project>
 ```
 
-Project packages use the same date + slug in every final artifact:
-`pipeline/projects/YYYY-MM-DD-topic-slug/script/YYYY-MM-DD-topic-slug-script.md`,
-`metadata/YYYY-MM-DD-topic-slug-metadata.txt`,
-`thumbnail/YYYY-MM-DD-topic-slug-thumbnail-brief.txt`, and
-`exports/YYYY-MM-DD-topic-slug-final.mp4`.
+## Project Shape
 
-## Clip Safety Rules
+New projects live under `02_Projects/YYYY-MM-DD-topic-slug/`:
 
-- New downloads are capped at 2 clips per source video.
-- Clips are 3.0s to 4.9s.
-- Gameplay, Xbox/EA Sports, simulations, podcast panels, fan-reaction hosts,
-  subscribe/like overlays, and creator intro screens are rejected.
-- Relevant game clips are preferred. Relevant player/coach/media interviews and
-  clean graphics are allowed when they serve the story.
-- Assembly never loops b-roll. If clips are not long enough for the voiceover,
-  it exits with a clear error.
-- Final videos must finish the full voiceover naturally. Never cut mid-sentence.
+```text
+00_READ_ME.md
+01_outline.md
+02_script.md
+03_metadata.txt
+04_clip_cue_sheet.csv
 
-## Setup
+Clips live separately at `clips/<project-name>/raw/`.
+```
 
-Run [SETUP.md](SETUP.md) once, then use [START_HERE.md](START_HERE.md) for day
-to day operation.
+No thumbnail folder is created. Dean makes thumbnails manually.
+Clip gathering searches YouTube, Reddit, and hockey websites like NHL.com,
+Sportsnet, TSN, and ESPN in the background.
 
-Keep `config/.env`, raw clips, recordings, and rendered media out of Git unless
-you intentionally move to Git LFS.
+## What Is Not Promised
+
+- Perfect final video assembly
+- Exact transcript-to-clip sync
+- Thumbnail creation
+- Finished Hockey Psychology-style edits
+- Fully automated graphics
+
+Advanced editing is outside the active handoff. Dean gets a clean production
+assistant, not an upload-ready video editor.

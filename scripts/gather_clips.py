@@ -2,38 +2,28 @@
 gather_clips.py — Highlight Clip Downloader
 ============================================
 Full workflow:
-  1. Accept a topic + optional YouTube URLs (or read from scripted outline)
+  1. Accept a topic or read clip cues from the project outline
   2. Load clip sources from config/clip_sources.json
-  3. Search approved YouTube channels via YouTube Data API (needs YOUTUBE_DATA_API_KEY)
-     OR accept --urls directly (no API key needed)
-  4. For each video: show title/URL, prompt for start/end timestamps
-  5. Download just that segment using yt-dlp (--download-sections)
-  6. Save each clip to clips/raw/ with a sidecar metadata JSON file
+  3. Search YouTube, Reddit, and trusted web sources for usable hockey footage
+  4. Download short edit-ready segments with yt-dlp
+  5. Save clips to clips/<project>/raw/
 
 Clip rules (always enforced):
   - Strictly < 5 seconds per clip (MAX_CLIP_DURATION = 4.9s)
   - Real game footage first; relevant interviews/graphics are allowed in auto mode
-  - Horizontal format only (width > height); vertical/Shorts are skipped
+  - Horizontal format only (width > height); vertical short-form clips are skipped
   - At most 2 clips per source video, spaced at least 60 seconds apart
-  - visual_break_after: true remains in metadata for backward compatibility, though
-    assemble_video.py now uses source diversity and optional retention cards
 
 Run:
     # Fully automated — reads outline sections, searches YouTube, picks timestamps:
-    python gather_clips.py --from-outline --auto
+    python3 gather_clips.py --from-outline --auto
 
     # Auto with explicit topic override:
-    python gather_clips.py --topic "McKenna comeback" --auto
-
-    # Interactive — you paste URLs and enter timestamps (4.9s cap enforced):
-    python gather_clips.py --topic "McKenna comeback" --urls "https://youtube.com/watch?v=..."
-
-    # Interactive from outline clip cues:
-    python gather_clips.py --from-outline
+    python3 gather_clips.py --topic "McKenna comeback" --auto
 
 Output:
-    clips/raw/mckenna-comeback-001.mp4
-    clips/raw/mckenna-comeback-001.json   (metadata sidecar)
+    clips/2026-05-29-topic-slug/raw/01-section-name-source-title.mp4
+    clips/2026-05-29-topic-slug/raw/01-section-name-source-title.json
 """
 
 import os
@@ -46,6 +36,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 import html
+import urllib.parse
+import urllib.request
 import yt_dlp
 from dotenv import load_dotenv
 from utils.projects import latest_script, resolve_project, write_default_requirements
@@ -59,8 +51,8 @@ load_dotenv(_PROJECT_ROOT / "config" / ".env")
 
 YOUTUBE_API_KEY     = os.getenv("YOUTUBE_DATA_API_KEY")
 CLIP_SOURCES_CONFIG = _PROJECT_ROOT / "config" / "clip_sources.json"
-SCRIPTED_DIR        = _PROJECT_ROOT / "pipeline" / "scripted"
-RECORDED_DIR        = _PROJECT_ROOT / "pipeline" / "recorded"
+SCRIPTED_DIR        = _PROJECT_ROOT / "03_Reference" / "past-scripts"
+RECORDED_DIR        = _PROJECT_ROOT / "03_Reference"
 RAW_CLIPS_DIR       = _PROJECT_ROOT / "clips" / "raw"
 FFMPEG_DIR          = "/opt/homebrew/bin"
 COOKIES_FILE        = _PROJECT_ROOT / "config" / "youtube-cookies.txt"
@@ -71,9 +63,10 @@ MAX_CLIP_DURATION    = 4.9   # seconds — hard cap, strictly < 5s (copyright ru
 TARGET_CLIP_DURATION = 4.0   # seconds — target window in auto-mode
 INTRO_SKIP_PCT       = 0.20  # skip first 20% of any video (title cards)
 OUTRO_SKIP_PCT       = 0.10  # stop 10% before end (end cards / screens)
-MIN_VIDEO_DURATION   = 20.0  # skip videos shorter than this (Shorts / teasers)
+MIN_VIDEO_DURATION   = 20.0  # skip videos shorter than this
 MIN_CLIP_GAP_SECONDS = 60.0  # minimum gap (seconds) between clips from the same source video
 CLIPS_PER_VIDEO_MAX  = 2     # max clips taken from any single source video (copyright safety)
+_REDDIT_BLOCKED_SUBREDDITS: set[str] = set()
 
 # Candidate classification. Interviews/graphics are allowed when relevant;
 # gameplay, podcasts, and unrelated talking heads are rejected for client demos.
@@ -221,11 +214,18 @@ def extract_topic_keywords(topic: str) -> list[str]:
 
 
 def _matches_topic_keywords(video: dict, keywords: list[str]) -> bool:
-    """True when any topic keyword appears in the search title or description."""
+    """
+    True when enough topic keywords appear in the title/description.
+    Requires 2+ matches when 3+ keywords are available to avoid false positives
+    where a player name alone triggers inclusion of completely off-topic videos.
+    """
     if not keywords:
         return True
     haystack = f"{video.get('title', '')} {video.get('description', '')}".lower()
-    return any(keyword in haystack for keyword in keywords)
+    matches = sum(1 for kw in keywords if kw in haystack)
+    threshold = 2 if len(keywords) >= 3 else 1
+    return matches >= threshold
+
 
 AUDIO_EXTENSIONS = {".mp4", ".mov", ".m4a", ".wav", ".aac"}
 
@@ -263,11 +263,11 @@ def load_clip_sources() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Voiceover duration
+# Target clip count
 # ---------------------------------------------------------------------------
 
-def get_voiceover_duration(recorded_dir: Path = RECORDED_DIR) -> float:
-    """Return duration in seconds of the most recent voiceover file in pipeline/recorded/."""
+def get_target_duration(recorded_dir: Path = RECORDED_DIR) -> float:
+    """Return a target duration for estimating how many raw clips to gather."""
     files = sorted(
         [f for f in recorded_dir.iterdir() if f.suffix.lower() in AUDIO_EXTENSIONS] if recorded_dir.exists() else [],
         key=lambda f: f.stat().st_mtime, reverse=True,
@@ -354,8 +354,8 @@ def parse_outline_sections(outline_path: Path = None, topic: str = "", script_di
             continue
         heading = heading_match.group(1).strip()
 
-        # Skip outro — no new footage needed
-        if re.match(r"outro", heading, re.IGNORECASE):
+        # Skip non-visual sections — no new footage needed.
+        if re.match(r"(outro|hook options|cta options)", heading, re.IGNORECASE):
             continue
 
         # Priority 1: placeholder replacement hint
@@ -379,18 +379,22 @@ def parse_outline_sections(outline_path: Path = None, topic: str = "", script_di
                     query = hint
             else:
                 query = hint
-            sections.append({"section": heading, "query": query.strip()[:80], "clips_needed": 0})
+            sections.append({"section": heading, "query": query.strip()[:80], "clips_needed": 0, "cue": hint})
             continue
 
-        # Priority 2: script visual cue marker
-        clip_marker = re.search(r"\[(CLIP|INTERVIEW|GRAPHIC):\s*(.+?)\]", block, re.IGNORECASE)
-        if clip_marker:
-            cue_type = clip_marker.group(1).lower()
-            cue = clip_marker.group(2).strip()
-            # Strip " — channel" suffix
-            cue = re.split(r"\s*[—–-]\s*(?:NHL|Sportsnet|TSN|ESPN|BarDown|placeholder.*)", cue)[0].strip()
-            cue = cue.strip("*").strip()
-            if not (re.match(r"^\d{2}-", cue) or "placeholder" in cue.lower()):
+        # Priority 2: script visual cue markers — emit one search job per marker
+        # Use findall so every [CLIP: ...] in the section gets its own job; re.search would
+        # silently drop all but the first cue, which is the main cause of missed/wrong clips.
+        clip_markers = re.findall(r"\[(CLIP|INTERVIEW|GRAPHIC):\s*(.+?)\]", block, re.IGNORECASE)
+        if clip_markers:
+            for cue_type_raw, cue_raw in clip_markers:
+                cue_type = cue_type_raw.lower()
+                cue = cue_raw.strip()
+                # Strip " — channel" suffix
+                cue = re.split(r"\s*[—–-]\s*(?:NHL|Sportsnet|TSN|ESPN|BarDown|placeholder.*)", cue)[0].strip()
+                cue = cue.strip("*").strip()
+                if re.match(r"^\d{2}-", cue) or "placeholder" in cue.lower():
+                    continue
                 if subject:
                     subj_words = set(subject.lower().split())
                     cue_words  = set(cue.lower().split())
@@ -404,8 +408,10 @@ def parse_outline_sections(outline_path: Path = None, topic: str = "", script_di
                     "section": f"{heading} ({cue_type})",
                     "query": query.strip()[:80],
                     "clips_needed": 0,
+                    # Carry the raw cue so the auto-mode loop can pass it to Claude scoring
+                    "cue": cue,
                 })
-                continue
+            continue
 
         # Priority 3: extract keywords from heading + first bullet points
         clean_heading = re.sub(r"^Section\s+\d+[:\s]+", "", heading, flags=re.IGNORECASE).strip()
@@ -443,7 +449,7 @@ def parse_outline_sections(outline_path: Path = None, topic: str = "", script_di
         else:
             query = heading_phrase
 
-        sections.append({"section": heading, "query": query.strip()[:80], "clips_needed": 0})
+        sections.append({"section": heading, "query": query.strip()[:80], "clips_needed": 0, "cue": query.strip()})
 
     return sections
 
@@ -660,6 +666,161 @@ def search_ytdlp_for_clips(
     return results
 
 
+def search_reddit_for_clips(
+    topic: str,
+    subreddits: list[str] = None,
+    max_results: int = 20,
+    seen_urls: set[str] = None,
+    stop_after: int = None,
+) -> list[dict]:
+    """
+    Search Reddit for video posts matching the topic.
+
+    Hits Reddit's public JSON search API (no API key needed) and returns
+    video post URLs in the same candidate dict shape as the YouTube paths.
+    Supported video hosts: v.redd.it (native), Streamable, Clips.Twitch, Medal.
+    YouTube links in Reddit posts are skipped (they're already covered by the
+    YouTube search path).
+
+    Returns list of dicts: video_id, title, channel, published_at, url, content_type.
+    """
+    seen_urls = seen_urls if seen_urls is not None else set()
+    subreddits = subreddits or ["hockey", "canucks", "nhl"]
+    stop_after = stop_after or max_results
+
+    _VIDEO_DOMAINS = {
+        "v.redd.it", "streamable.com", "clips.twitch.tv",
+        "medal.tv", "clippituser.tv",
+    }
+    _SKIP_DOMAINS = {"youtube.com", "youtu.be", "twitter.com", "x.com"}
+
+    results: list[dict] = []
+
+    for subreddit in subreddits:
+        if subreddit in _REDDIT_BLOCKED_SUBREDDITS:
+            continue
+        if stop_after and len(results) >= stop_after:
+            break
+        encoded_topic = urllib.parse.quote(topic)
+        api_url = (
+            f"https://www.reddit.com/r/{subreddit}/search.json"
+            f"?q={encoded_topic}&restrict_sr=true&sort=new&t=month&limit=25&type=link"
+        )
+        try:
+            req = urllib.request.Request(
+                api_url,
+                headers={"User-Agent": "DeanerHD/1.0 (hockey clip research)"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except Exception as e:
+            if "403" in str(e) or "Blocked" in str(e):
+                _REDDIT_BLOCKED_SUBREDDITS.add(subreddit)
+                print(f"[gather_clips] Reddit blocked r/{subreddit} public search for this run; continuing with other sources.")
+            else:
+                print(f"[gather_clips] Reddit search error for r/{subreddit}: {e}")
+            continue
+
+        for child in data.get("data", {}).get("children", []):
+            if stop_after and len(results) >= stop_after:
+                break
+            post = child.get("data", {})
+
+            domain = post.get("domain", "")
+            is_native_video = post.get("is_video", False)
+
+            # Determine video URL
+            video_url = None
+            if is_native_video:
+                # v.redd.it — use the Reddit post URL, yt-dlp handles the rest
+                video_url = post.get("url", "")
+            elif any(vd in domain for vd in _VIDEO_DOMAINS):
+                video_url = post.get("url", "")
+
+            if not video_url:
+                continue
+            if any(skip in video_url for skip in _SKIP_DOMAINS):
+                continue
+            if video_url in seen_urls:
+                continue
+            seen_urls.add(video_url)
+
+            title = html.unescape(post.get("title", ""))
+            preliminary_type = classify_candidate({"title": title, "description": "", "channel": f"r/{subreddit}"})
+            if preliminary_type in {"gameplay", "talking_head"}:
+                continue
+
+            results.append({
+                "video_id": post.get("id", ""),
+                "title": title,
+                "description": "",
+                "channel": f"r/{subreddit}",
+                "published_at": str(int(post.get("created_utc", 0))),
+                "url": video_url,
+                "content_type": preliminary_type,
+            })
+
+    return results
+
+
+def search_web_for_clip_sources(
+    topic: str,
+    max_results: int = 12,
+    seen_urls: set[str] = None,
+) -> list[dict]:
+    """
+    Find hockey clip/article pages outside YouTube.
+
+    This is an internal source-discovery helper: Dean still just asks to gather
+    clips, and Codex tries NHL/Sportsnet/TSN/ESPN-style sources in the background.
+    yt-dlp will only download sources it supports; unsupported pages are skipped.
+    """
+    seen_urls = seen_urls if seen_urls is not None else set()
+    domains = ["nhl.com", "sportsnet.ca", "tsn.ca", "espn.com/nhl"]
+    results: list[dict] = []
+
+    for domain in domains:
+        if len(results) >= max_results:
+            break
+        query = urllib.parse.quote_plus(f"site:{domain} {topic} video")
+        url = f"https://duckduckgo.com/html/?q={query}"
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 DeanerHD clip research"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html_text = resp.read().decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+
+        links = re.findall(r'href="[^"]*uddg=([^"&]+)', html_text)
+        if not links:
+            links = re.findall(r'href="(https?://[^"]+)"', html_text)
+        for encoded_link in links:
+            if len(results) >= max_results:
+                break
+            candidate_url = html.unescape(urllib.parse.unquote(encoded_link))
+            if not candidate_url.startswith("http") or "duckduckgo.com" in candidate_url:
+                continue
+            if candidate_url in seen_urls:
+                continue
+            seen_urls.add(candidate_url)
+            title = candidate_url.split("?")[0].rstrip("/").split("/")[-1].replace("-", " ")
+            results.append({
+                "video_id": "",
+                "title": title or candidate_url,
+                "description": "",
+                "channel": domain,
+                "published_at": "",
+                "url": candidate_url,
+                "content_type": "game",
+                "source_provider": "web",
+            })
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # yt-dlp helpers
 # ---------------------------------------------------------------------------
@@ -839,7 +1000,6 @@ def save_clip_metadata(
         "content_type":     video.get("content_type", "game"),
         "downloaded_at":    datetime.now(timezone.utc).isoformat(),
         # Kept for backward compatibility with older generated metadata consumers.
-        # assemble_video.py now ignores this and relies on source diversity ordering.
         "visual_break_after": True,
     }
     metadata_path = output_path.with_suffix(".json")
@@ -926,6 +1086,23 @@ def slugify(text: str) -> str:
     return slug[:50].strip("-")
 
 
+def readable_clip_filename(
+    clip_num: int,
+    section: str,
+    video: dict,
+    fallback_topic: str,
+) -> str:
+    """
+    Build editor-friendly clip names so Dean can skim clips in Finder.
+
+    Format:
+      01-section-name-source-title.mp4
+    """
+    section_slug = slugify(section or fallback_topic)[:34] or "clip"
+    title_slug = slugify(video.get("title", "") or fallback_topic)[:42] or "source"
+    return f"{clip_num:02d}-{section_slug}-{title_slug}.mp4"
+
+
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
@@ -938,21 +1115,22 @@ def gather_clips_for_topic(
     auto: bool = False,
     project=None,
     search_provider: str = "auto",
+    section_filter: str = "",
 ):
     """
     Full pipeline: find videos → select timestamps → download segments → save metadata.
 
-    auto=True  — fully non-interactive; reads outline sections, searches YouTube,
-                 picks timestamps from the action zone. Fills the voiceover duration.
+    auto=True  — fully non-interactive; reads outline sections, searches cue by cue,
+                 and downloads short clips into the project raw clip folder.
     auto=False — interactive; prompts for timestamps. Enforces 4.9s max.
     """
     raw_clips_dir = project.raw_clips_dir if project else RAW_CLIPS_DIR
-    recorded_dir = project.voiceover_dir if project else RECORDED_DIR
     script_dir = project.script_dir if project else SCRIPTED_DIR
     if project:
         write_default_requirements(project, topic)
         print(f"[gather_clips] Project: {project.root}")
     raw_clips_dir.mkdir(parents=True, exist_ok=True)
+    urls = list(urls or [])
     slug = slugify(topic)
 
     # =========================================================================
@@ -963,9 +1141,9 @@ def gather_clips_for_topic(
             print("[gather_clips] --search-provider youtube-api requires YOUTUBE_DATA_API_KEY in config/.env.")
             return
 
-        vo_dur = get_voiceover_duration(recorded_dir)
-        total_clips_needed = math.ceil(vo_dur / TARGET_CLIP_DURATION) + 2
-        print(f"[gather_clips] Voiceover: {vo_dur:.1f}s")
+        target_dur = get_target_duration()
+        total_clips_needed = math.ceil(target_dur / TARGET_CLIP_DURATION) + 2
+        print(f"[gather_clips] Target coverage: {target_dur:.1f}s")
         print(f"[gather_clips] Clips needed: {total_clips_needed} (≤{MAX_CLIP_DURATION:.0f}s each)")
 
         sources = load_clip_sources()
@@ -976,7 +1154,17 @@ def gather_clips_for_topic(
         ]
 
         # Parse outline sections for context-aware queries
-        sections = parse_outline_sections(topic=topic, script_dir=script_dir)
+        outline_path = project.script_path if project and from_outline else None
+        sections = parse_outline_sections(topic=topic, script_dir=script_dir, outline_path=outline_path)
+        if section_filter:
+            needle = section_filter.lower()
+            sections = [
+                s for s in sections
+                if needle in f"{s.get('section', '')} {s.get('query', '')} {s.get('cue', '')}".lower()
+            ]
+            if not sections:
+                print(f"[gather_clips] No outline cue matched section filter: {section_filter}")
+                return
         if not sections:
             sections = [{"section": "Main", "query": topic, "clips_needed": total_clips_needed}]
         else:
@@ -994,16 +1182,31 @@ def gather_clips_for_topic(
         search_jobs = []
         for sec in sections:
             for query in build_query_expansions(sec["query"]):
-                search_jobs.append({"section": sec["section"], "query": query})
+                search_jobs.append({
+                    "section": sec["section"],
+                    "query": query,
+                    "clips_needed": sec.get("clips_needed", total_clips_needed),
+                    # Carry the original cue text for Claude relevance scoring.
+                    # The first expansion is the raw cue; subsequent expansions use it too.
+                    "cue": sec.get("cue", sec["query"]),
+                })
+        section_counts: dict[str, int] = {}
 
         for job in search_jobs:
             if downloaded >= total_clips_needed:
                 break
+            section_name = job["section"]
+            section_limit = int(job.get("clips_needed") or total_clips_needed)
+            if section_counts.get(section_name, 0) >= section_limit:
+                continue
 
             query = job["query"]
             relevance_seed = query if from_outline else topic
             topic_keywords = extract_topic_keywords(relevance_seed)
-            remaining = total_clips_needed - downloaded
+            remaining = min(
+                total_clips_needed - downloaded,
+                section_limit - section_counts.get(section_name, 0),
+            )
 
             print(f"--- Section: {job['section']}")
             print(f"    Query:   {query}")
@@ -1030,13 +1233,60 @@ def gather_clips_for_topic(
                     stop_after=stop_after,
                 )
                 candidates.extend(more_candidates)
+
+            # Reddit — runs on every query pass; picks up clips that appear on
+            # r/hockey and r/canucks before YouTube channels upload them.
+            # Streamable / v.redd.it links are fully yt-dlp-compatible.
+            reddit_candidates = search_reddit_for_clips(
+                query,
+                subreddits=["hockey", "canucks", "nhl"],
+                max_results=15,
+                seen_urls=seen_urls,
+                stop_after=stop_after,
+            )
+            if reddit_candidates:
+                print(f"    [Reddit] +{len(reddit_candidates)} candidate(s)")
+            candidates.extend(reddit_candidates)
+
+            web_candidates = search_web_for_clip_sources(
+                query,
+                max_results=8,
+                seen_urls=seen_urls,
+            )
+            if web_candidates:
+                print(f"    [Web] +{len(web_candidates)} NHL/Sportsnet/TSN/ESPN candidate(s)")
+            candidates.extend(web_candidates)
+
             if not candidates:
                 print("    ✗ No new search results — trying next query.\n")
                 continue
 
-            for c in candidates:
-                if downloaded >= total_clips_needed:
+            # Claude relevance scoring — batch-score candidates against the specific cue
+            # before downloading anything. One Haiku call per batch; cheap and fast.
+            cue_for_scoring = job.get("cue") or query
+            try:
+                from utils.claude_client import score_clip_relevance
+                relevance_scores = score_clip_relevance(candidates[:15], cue_for_scoring)
+            except Exception as _score_err:
+                print(f"    ⚠ Relevance scoring unavailable ({_score_err}) — falling back to keyword filter.")
+                relevance_scores = [10.0] * len(candidates)
+
+            scored_candidates = list(zip(candidates, relevance_scores))
+            scored_candidates.sort(key=lambda x: x[1], reverse=True)
+
+            # Log scores so the operator can see what Claude thought
+            print(f"    Relevance scores (cue: \"{cue_for_scoring[:60]}\"):")
+            for _c, _s in scored_candidates[:8]:
+                tag = "✓" if _s >= 4 else "✗"
+                print(f"      {tag} {_s:.0f}/10  {_c['title'][:60]}")
+
+            for c, relevance_score in scored_candidates:
+                if downloaded >= total_clips_needed or section_counts.get(section_name, 0) >= section_limit:
                     break
+
+                if relevance_score < 4:
+                    print(f"    ↷ Low relevance ({relevance_score:.0f}/10): {c['title'][:55]}")
+                    continue
 
                 if not _matches_topic_keywords(c, topic_keywords):
                     print(f"    ↷ Off-topic (no keyword match): {c['title'][:55]}")
@@ -1068,7 +1318,10 @@ def gather_clips_for_topic(
                     print(f"    ↷ Vertical ({w}×{h}): {info['title'][:55]}")
                     continue
 
-                remaining = total_clips_needed - downloaded
+                remaining = min(
+                    total_clips_needed - downloaded,
+                    section_limit - section_counts.get(section_name, 0),
+                )
                 clips_from_this = min(CLIPS_PER_VIDEO_MAX - clips_already, remaining)
                 windows = pick_clip_windows(dur, TARGET_CLIP_DURATION, clips_from_this)
                 if not windows:
@@ -1089,7 +1342,12 @@ def gather_clips_for_topic(
                         continue
 
                     clip_num = downloaded + 1
-                    out_path = raw_clips_dir / f"{slug}-{clip_num:03d}.mp4"
+                    out_path = raw_clips_dir / readable_clip_filename(
+                        clip_num,
+                        job["section"],
+                        info,
+                        topic,
+                    )
                     s_str = f"{int(start)//60}:{int(start)%60:05.2f}"
                     e_str = f"{int(end)//60}:{int(end)%60:05.2f}"
                     print(f"      ↓ Clip {clip_num:02d}: {s_str}–{e_str}  ({end-start:.1f}s)")
@@ -1099,6 +1357,7 @@ def gather_clips_for_topic(
                         actual_duration = _probe_media_duration(out_path)
                         save_clip_metadata(out_path, info, start, start + actual_duration, topic, section=job["section"])
                         downloaded += 1
+                        section_counts[section_name] = section_counts.get(section_name, 0) + 1
                         clips_by_source[source_url] = clips_by_source.get(source_url, 0) + 1
                         channel = info.get("channel", "Unknown")
                         clips_by_channel[channel] = clips_by_channel.get(channel, 0) + 1
@@ -1112,7 +1371,7 @@ def gather_clips_for_topic(
         total_secs = downloaded * TARGET_CLIP_DURATION
         print("=" * 55)
         print(f"DONE  |  Clips: {downloaded}  |  Sections failed: {len(failed_sections)}")
-        print(f"Total clip duration: ~{total_secs:.0f}s  (voiceover: {vo_dur:.1f}s)")
+        print(f"Total clip duration: ~{total_secs:.0f}s  (target: {target_dur:.1f}s)")
         print(f"Distinct source videos: {len(clips_by_source)}")
         if clips_by_source:
             print("Source URL counts:")
@@ -1124,13 +1383,10 @@ def gather_clips_for_topic(
                 print(f"  {count}× {channel}")
         if downloaded < total_clips_needed:
             missing = total_clips_needed - downloaded
-            print(f"WARNING: Still missing ~{missing} clip(s) to fill the voiceover.")
+            print(f"WARNING: Still missing ~{missing} clip(s) for the target coverage.")
         if downloaded:
             print(f"Clips saved to: {raw_clips_dir}")
-            if project:
-                print(f"Review them, then move keepers to {project.approved_clips_dir}/")
-            else:
-                print("Review them, then move keepers to clips/approved/")
+            print("Review them in that raw folder and use the keepers in Dean's editor.")
         for f in failed_sections:
             print(f"  ✗ {f}")
         print("=" * 55)
@@ -1182,7 +1438,7 @@ def gather_clips_for_topic(
     else:
         if not YOUTUBE_API_KEY:
             print("[gather_clips] No YOUTUBE_DATA_API_KEY. Use --urls to provide YouTube URLs directly.")
-            print("  Example: python gather_clips.py --topic '...' --urls 'https://youtube.com/watch?v=...'")
+            print("  Example: python3 scripts/gather_clips.py --topic '...' --urls 'https://youtube.com/watch?v=...'")
             return
         sources = load_clip_sources()
         channel_ids = [
@@ -1231,7 +1487,12 @@ def gather_clips_for_topic(
             print(f"         ⚠  Capped to {MAX_CLIP_DURATION:.0f}s → end adjusted to {cap_end_str}")
 
         clip_num = downloaded + 1
-        out_path = raw_clips_dir / f"{slug}-{clip_num:03d}.mp4"
+        out_path = raw_clips_dir / readable_clip_filename(
+            clip_num,
+            topic,
+            video,
+            topic,
+        )
 
         print(f"         Downloading {start_str}–{end_str} ({end-start:.0f}s)...")
         ok = download_clip_segment(video["url"], start, end, out_path)
@@ -1249,10 +1510,7 @@ def gather_clips_for_topic(
     print(f"DONE  |  Downloaded: {downloaded}  |  Failed: {len(failed)}")
     if downloaded:
         print(f"Clips saved to: {raw_clips_dir}")
-        if project:
-            print(f"Review them, then move keepers to {project.approved_clips_dir}/")
-        else:
-            print("Review them, then move keepers to clips/approved/")
+        print("Review them in that raw folder and use the keepers in Dean's editor.")
     if failed:
         for t in failed:
             print(f"  ✗ {t[:60]}")
@@ -1276,6 +1534,10 @@ def main():
         help="One or more YouTube URLs (skips search, no API key needed)"
     )
     parser.add_argument(
+        "--section", type=str, default="",
+        help="Only gather outline cues whose section/query/cue text contains this phrase."
+    )
+    parser.add_argument(
         "--from-outline", action="store_true",
         help="Read [CLIP: ...] cues from the latest scripted outline"
     )
@@ -1292,7 +1554,7 @@ def main():
     )
     parser.add_argument(
         "--project", type=str, default="",
-        help="Optional project slug/path. Uses that package's script, raw clips, and voiceover folders."
+        help="Optional project slug/path. Uses that package's outline and top-level raw clip folder."
     )
     parser.add_argument(
         "--search-provider",
@@ -1310,7 +1572,10 @@ def main():
     if args.from_outline and not topic:
         script_path = latest_script(project, SCRIPTED_DIR)
         if script_path:
-            topic = script_path.stem.replace("-script", "").replace("-", " ").strip()
+            if project and getattr(project, "simple_layout", False):
+                topic = project.slug.replace("-", " ").strip()
+            else:
+                topic = script_path.stem.replace("-script", "").replace("-", " ").strip()
         else:
             topic = "hockey highlights"
 
@@ -1322,6 +1587,7 @@ def main():
         auto=args.auto,
         project=project,
         search_provider=args.search_provider,
+        section_filter=args.section,
     )
 
 

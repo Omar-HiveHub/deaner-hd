@@ -1,28 +1,28 @@
 """
-generate_script.py — Ready-to-Record Script Generator
-======================================================
+generate_script.py — Dean-Ready Outline / Script Generator
+===========================================================
 Full workflow:
   1. Accept a topic (and optional hook/type) as CLI input
-     OR read the most recent approved idea from pipeline/ideas/
+     OR read the most recent approved idea from 01_Ideas/
   2. Load DEAN.md and reference files as context
-  3. Load 5 sample transcripts from voice/transcripts/ (sorted by view count)
+  3. Load 5 sample transcripts from 03_Reference/transcripts/ (sorted by view count)
      as voice examples — type-matched to the video content type
-  4. Call Claude Sonnet via claude_client.generate_script(), which returns a
-     complete voiceover-ready prose script in Dean's exact speaking voice
-     with precise [CLIP:], [INTERVIEW:], and [GRAPHIC:] gather cues
-  5. Save the script to pipeline/scripted/YYYY-MM-DD-[slug].md
+  4. Call Claude via claude_client.generate_script(), which returns Dean's
+     default recording outline (hooks, section beats, clip cues, CTA options)
+     unless --format script is explicitly requested.
+  5. Save the outline/script to the active project folder.
 
-The output is a full script Dean can read directly into a microphone — not
-bullet points or a structural outline. It should sound like one of his actual
-transcripts: conversational run-ons, "and/but/I mean" chains, "I think/I feel"
-before opinions, "man" as emphasis, and his locked 5-step sign-off.
+Default output matches the kickoff-call workflow: Dean reviews an outline,
+clips are gathered from precise production cues, then Dean records naturally
+from the beats. Full word-for-word scripts are still available for cases where
+Omar/Dean explicitly asks for one.
 
 Run:
-    python generate_script.py --topic "Nobody saw what happened to Bedard in Game 1"
-    python generate_script.py --topic "..." --type incident
-    python generate_script.py --topic "Gavin McKenna 2026 Draft" --type biography
-    python generate_script.py --topic "..." --hook "They did it again."
-    python generate_script.py --from-ideas   # picks top idea from latest ideas file
+    python3 generate_script.py --topic "Nobody saw what happened to Bedard in Game 1"
+    python3 generate_script.py --topic "..." --type incident
+    python3 generate_script.py --topic "Gavin McKenna 2026 Draft" --type biography
+    python3 generate_script.py --topic "..." --format script
+    python3 generate_script.py --from-ideas   # picks top idea from latest ideas file
 """
 
 import argparse
@@ -41,8 +41,9 @@ from utils.projects import resolve_project, slugify as project_slugify, write_de
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_PROJECT_ROOT / "config" / ".env")
 
-IDEAS_DIR      = _PROJECT_ROOT / "pipeline" / "ideas"
-SCRIPTED_DIR   = _PROJECT_ROOT / "pipeline" / "scripted"
+IDEAS_DIR      = _PROJECT_ROOT / "01_Ideas"
+LEGACY_IDEAS_DIR = _PROJECT_ROOT / "01_Ideas"
+SCRIPTED_DIR   = _PROJECT_ROOT / "03_Reference" / "past-scripts"
 TODAY = datetime.date.today().isoformat()
 
 
@@ -56,7 +57,7 @@ def slugify(text: str) -> str:
 
 def load_top_idea_from_latest_file() -> tuple[str, str]:
     """
-    Find the most recent ideas file in pipeline/ideas/ and extract
+    Find the most recent ideas file in 01_Ideas/ and extract
     the first (top-ranked) topic and its hook line.
 
     Returns:
@@ -65,8 +66,10 @@ def load_top_idea_from_latest_file() -> tuple[str, str]:
     """
     try:
         ideas_files = sorted(IDEAS_DIR.glob("*.md"), reverse=True)
+        if not ideas_files and LEGACY_IDEAS_DIR.exists():
+            ideas_files = sorted(LEGACY_IDEAS_DIR.glob("*.md"), reverse=True)
         if not ideas_files:
-            print("[generate_script] No ideas files found in pipeline/ideas/")
+            print("[generate_script] No ideas files found in 01_Ideas/")
             return ("", "")
         latest = ideas_files[0]
         print(f"[generate_script] Loading top idea from {latest.name}")
@@ -81,9 +84,9 @@ def load_top_idea_from_latest_file() -> tuple[str, str]:
         return ("", "")
 
 
-def save_script(script_markdown: str, topic: str, topic_type: str, project=None) -> Path:
+def save_script(script_markdown: str, topic: str, topic_type: str, output_format: str, project=None) -> Path:
     """
-    Save the generated script to pipeline/scripted/YYYY-MM-DD-[slug].md.
+    Save the generated outline or script.
 
     Prepends a header with date, topic type, and word count estimate.
     Returns the path to the saved file.
@@ -91,7 +94,10 @@ def save_script(script_markdown: str, topic: str, topic_type: str, project=None)
     slug = slugify(topic)
     if project:
         write_default_requirements(project, topic)
-        output_path = project.script_path
+        if getattr(project, "simple_layout", False) and output_format == "script":
+            output_path = project.root / "02_script.md"
+        else:
+            output_path = project.script_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
     else:
         SCRIPTED_DIR.mkdir(parents=True, exist_ok=True)
@@ -103,7 +109,7 @@ def save_script(script_markdown: str, topic: str, topic_type: str, project=None)
 
     header = (
         f"# Script: {topic}\n"
-        f"_Generated: {TODAY} | Type: {topic_type} | ~{word_count} words spoken_\n\n"
+        f"_Generated: {TODAY} | Type: {topic_type} | Format: {output_format} | ~{word_count} words spoken_\n\n"
         f"---\n\n"
     )
     try:
@@ -122,8 +128,7 @@ def save_script(script_markdown: str, topic: str, topic_type: str, project=None)
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Generate a complete ready-to-record voiceover script in Dean's exact voice. "
-            "Output is full prose — not bullet points. Dean reads it directly into the mic."
+            "Generate Dean's default recording outline, or a full script when explicitly requested."
         )
     )
     parser.add_argument(
@@ -152,13 +157,19 @@ def main():
     parser.add_argument(
         "--from-ideas",
         action="store_true",
-        help="Auto-pick the top idea from the latest pipeline/ideas/ file"
+        help="Auto-pick the top idea from the latest 01_Ideas/ file"
     )
     parser.add_argument(
         "--project",
         type=str,
         default="",
-        help="Optional project slug/path. Saves to pipeline/projects/YYYY-MM-DD-slug/script/."
+        help="Optional project slug/path. Saves to the project folder."
+    )
+    parser.add_argument(
+        "--format",
+        choices=["outline", "script"],
+        default="outline",
+        help="Default is Dean's preferred outline-first workflow. Use 'script' for word-for-word prose."
     )
     args = parser.parse_args()
 
@@ -172,7 +183,7 @@ def main():
             print("[generate_script] No topic found. Pass --topic or run fetch_ideas.py first.")
             return
 
-    print(f"[generate_script] Generating script for: {topic}")
+    print(f"[generate_script] Generating {args.format} for: {topic}")
     print(f"[generate_script] Type: {topic_type}")
     if hook:
         print(f"[generate_script] Hook: {hook}")
@@ -188,13 +199,13 @@ def main():
     )
 
     try:
-        script = generate_script(cue_context, hook=hook, topic_type=topic_type)
+        script = generate_script(cue_context, hook=hook, topic_type=topic_type, output_format=args.format)
     except Exception as e:
         print(f"[generate_script] Claude API error: {e}")
         return
 
-    output_path = save_script(script, topic, topic_type, project=project)
-    print(f"[generate_script] Done. Check {output_path.parent}/ for your script.")
+    output_path = save_script(script, topic, topic_type, args.format, project=project)
+    print(f"[generate_script] Done. Check {output_path.parent}/ for your {args.format}.")
 
 
 if __name__ == "__main__":

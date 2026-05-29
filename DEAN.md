@@ -13,7 +13,7 @@
 - **Current Subscribers:** ~10,000–20,000 estimated (based on view counts across recent videos)
 - **Peak Performing Video:** "This player is becoming the GREATEST Swedish Prospect of all time" (Ivar Stenberg) — 75,000+ views
 - **Channel Age:** Active since at least 2021 (has older Stanley Cup Playoff livestreams)
-- **Primary Platform:** YouTube (long-form commentary + Shorts)
+- **Primary Platform:** YouTube long-form commentary
 
 ---
 
@@ -87,28 +87,20 @@
 
 - **Target upload cadence:** Every 3 days (confirmed from analytics — views exhaust at ~5 days, so 3-day window maximises growth before decay)
 - **Long-form length:** 4–6 minutes. Shorter is fine if the story fits. Not shorter than 3 min.
-- **Shorts per video:** 3 Shorts cut from each long-form video to start; scale volume later based on which perform best
 - **Sub goal (3-month):** 25,000 subscribers
 - **View goal (3-month):** 500,000 total views
-
----
-
-## Recording Setup
-
-- **Primary content:** Talking-head commentary style with hockey clips as b-roll
-- **File format Dean records in:** MP4 / M4A
-- **Storage location for recordings:** pipeline/recorded/
 
 ---
 
 ## Workflow Preference
 
 - **Auto-upload vs manual review:** Manual review before upload. Auto-draft to YouTube Studio is a future feature once local is stable.
-- **Which steps Dean wants to approve manually:** Clip selection (move raw → approved), outline review, metadata review before posting
-- **How much editing Dean does himself vs automated:** Automated clip assembly, manual final check
-- **Preferred review format:** File drop — check pipeline/ and outputs/ folders
-- **Outline format:** TBD — Dean sending sample documents + voicemail to confirm preferred style (full script vs hook + bullets + CTA)
-- **Execution environment:** Local on Dean's Mac. Omar provides setup scripts so Dean never needs to touch terminal. Hosted drag-and-drop UI planned after local setup is stable.
+- **Which steps Dean wants to approve manually:** Outline review, clip review, metadata review before posting
+- **How much editing Dean does himself vs automated:** AI gathers/organizes clips; Dean does final editing manually
+- **Preferred review format:** File drop — check `02_Projects/` folders
+- **Outline format:** Default to hook options + section beats + CTA options.
+  Full word-for-word scripts are available only when Dean/Omar asks for them.
+- **Execution environment:** Local on Dean's Mac through Codex/CLI.
 
 ---
 
@@ -116,14 +108,12 @@
 
 The confirmed production flow for every video:
 
-1. **Fetch ideas** — pull latest NHL news, Reddit, YouTube, competitor uploads, and schedule context. Pick the topic from `pipeline/ideas/`.
-2. **Create project package** — one folder under `pipeline/projects/YYYY-MM-DD-slug/` for script, metadata, clips, voiceover, notes, thumbnail brief, and exports.
-3. **Generate script and metadata** — write the ready-to-record prose script first, with `[CLIP:]`, `[INTERVIEW:]`, and `[GRAPHIC:]` cues. Metadata can be generated from the script before rendering.
-4. **Gather clips from the script** — run the gatherer with `--project <slug> --from-outline --auto` so visuals match the approved script.
-5. **Approve clips** — move keepers plus matching `.json` sidecars from the project `clips/raw/` to project `clips/approved/`.
-6. **Record voiceover** — record the approved script and drop the file into the project `voiceover/`.
-7. **Assemble video** — export the final MP4 to the project `exports/`. The full voiceover must complete naturally; never cut mid-sentence.
-8. **Finalize package** — generate final metadata, thumbnail brief, and proof notes. Shorts are a later separate workflow, not automatic long-form cuts.
+1. **Fetch ideas** — pull latest NHL news, Reddit, YouTube, competitor uploads, and schedule context. Save source reports in `01_Ideas/`.
+2. **Create project package** — one folder under `02_Projects/YYYY-MM-DD-slug/`.
+3. **Generate outline and metadata** — write Dean's recording outline first, with `[CLIP:]`, `[INTERVIEW:]`, and `[GRAPHIC:]` cues. Use a full prose script only when requested.
+4. **Gather clips from the outline** — gather clips into `clips/YYYY-MM-DD-slug/raw/`.
+5. **Review clips** — Dean opens the raw clip folder and uses the useful clips in his editor.
+6. **Package for manual editing** — generate `04_clip_cue_sheet.csv`, keep `03_metadata.txt` ready to paste, and edit manually in Dean's editor.
 
 ---
 
@@ -132,14 +122,13 @@ The confirmed production flow for every video:
 - No automated way to find topic ideas — manually scrolling Twitter/Reddit currently
 - Clip sourcing is manual — have to find highlights on YouTube, download separately
 - Metadata generation takes too long — writing titles and descriptions from scratch every video
-- Shorts workflow is parked for later — future Shorts should use separate 20-30 second scripts, not raw long-form cuts
-- Low CTR from poor thumbnails — high-quality, focused thumbnails with compelling text are a known gap
+- Dean makes thumbnails manually; this system does not generate thumbnails.
 - Copyright claims from consecutive clips — clips stacked back-to-back trigger claims even at 5s each. Fix: alternate clips with stat boards, screenshots, or other visual breaks
 
 ## Copyright Rules (CRITICAL)
 
 - **5-second rule:** No single clip longer than 5 seconds
-- **No looping:** Never loop b-roll under a long voiceover
+- **No looping:** Never use the same visual repeatedly as filler
 - **Source diversity:** Avoid adjacent same-source clips whenever possible
 - **Varied visuals:** Mix real game footage with relevant interviews, training/workout footage, official scorecards, rankings, stats, and screenshots
 - **Rejected visuals:** No gameplay, simulations, fan hosts, podcast panels, subscribe/like overlays, creator title cards, random faces, or visible watermarks when avoidable
@@ -153,15 +142,14 @@ What makes a DeanerHD video perform well (from kickoff call analysis):
 - **Thumbnail is high-quality and focused** — two players clearly visible, clear text, no zoomed-out blurry shots
 - **Story-driven structure** — backstory → current season → skill analysis → draft destination → viewer question
 - **Engagement CTA at end** — pose a specific question to the audience so comments are directed
-- **Sound effects and mood music** — clicks, thuds, transitions, mood shifts (sad → upbeat). Dean wants this added and has competitors as examples.
+- **Sound effects and mood music** — manual editing choices, not part of the simplified handoff automation.
 - **Video length 4–6 minutes** — long enough to build the story, short enough to hold attention
 
-## Audio / Sound Design (Needed)
+## Simplified Handoff Boundary
 
-- Dean wants contextual sound effects added at key moments (e.g. a click or thud on a hit, mood music under a sad player story segment)
-- Inspired by competitor Hockey Psychology's use of audio layers
-- Dean will send specific timestamped examples from competitors showing exactly what he means
-- This should be part of the `assemble_video.py` step — background music track + SFX cue points
+- The system is a production assistant, not an upload-ready editor.
+- Final editing, thumbnails, graphics, SFX, and exact clip-to-transcript syncing are manual.
+- The active promise is ideas, outlines/scripts, metadata, organized clip gathering, transcripts/reference, and clean cue sheets.
 
 ## System Notes
 

@@ -9,13 +9,13 @@ Full workflow:
   5. Deduplicate and rank by recency
   6. Pass the combined content to Claude Sonnet via claude_client.generate_ideas()
   7. Claude returns 5–8 ranked video topic suggestions with hooks
-  8. Save output to pipeline/ideas/YYYY-MM-DD-ideas.md
+  8. Save output to 01_Ideas/YYYY-MM-DD-ideas.md
 
 Run:
-    python fetch_ideas.py
+    python3 fetch_ideas.py
 
 Output:
-    pipeline/ideas/2026-04-04-ideas.md  (date-stamped)
+    01_Ideas/2026-04-04-ideas.md  (date-stamped)
 """
 
 import calendar
@@ -42,7 +42,7 @@ load_dotenv(_PROJECT_ROOT / "config" / ".env")
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_DATA_API_KEY")
 FEEDS_CONFIG = _PROJECT_ROOT / "config" / "feeds.json"
-IDEAS_OUTPUT_DIR = _PROJECT_ROOT / "pipeline" / "ideas"
+IDEAS_OUTPUT_DIR = _PROJECT_ROOT / "01_Ideas"
 COMPETITORS_CONFIG = _PROJECT_ROOT / "config" / "competitors.json"
 
 TODAY = datetime.date.today().isoformat()
@@ -331,11 +331,11 @@ def assemble_raw_content(
 
 def save_ideas(ideas_markdown: str, output_dir: Path) -> Path:
     """
-    Save the AI-generated ideas to a dated markdown file in pipeline/ideas/.
+    Save the AI-generated ideas to a dated markdown file in 01_Ideas/.
 
     Args:
         ideas_markdown: Markdown string returned by Claude.
-        output_dir:     Path to pipeline/ideas/.
+        output_dir:     Path to 01_Ideas/.
 
     Returns:
         Path to the saved file.
@@ -407,7 +407,7 @@ def main():
     as source material instead of RSS/Reddit.
 
     Example:
-        python fetch_ideas.py --content ../voice/transcripts/20260308-bS6KHGnewJI.txt
+        python3 fetch_ideas.py --content ../03_Reference/transcripts/20260308-bS6KHGnewJI.txt
     """
     import argparse
     parser = argparse.ArgumentParser(description="Fetch and generate video topic ideas.")
@@ -473,7 +473,7 @@ def main():
         return
 
     save_ideas(ideas_markdown, IDEAS_OUTPUT_DIR)
-    print("[fetch_ideas] Done. Check pipeline/ideas/ for today's suggestions.")
+    print("[fetch_ideas] Done. Check 01_Ideas/ for today's suggestions.")
 
 
 if __name__ == "__main__":

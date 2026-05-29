@@ -38,6 +38,24 @@ pipeline/projects/**/_drafts/*.m4a
 pipeline/projects/**/_drafts/*.mp3
 pipeline/projects/**/_drafts/*.wav
 pipeline/projects/**/_drafts/*.webm
+02_Projects/**/exports_optional/*.mp4
+02_Projects/**/exports_optional/*.mov
+02_Projects/**/voiceover/*
+02_Projects/**/clips/raw/*.mp4
+02_Projects/**/clips/raw/*.mov
+02_Projects/**/clips/raw/*.mkv
+02_Projects/**/clips/approved/*.mp4
+02_Projects/**/clips/approved/*.mov
+02_Projects/**/clips/approved/*.mkv
+02_Projects/**/clips/rejected/*.mp4
+02_Projects/**/clips/rejected/*.mov
+02_Projects/**/clips/rejected/*.mkv
+02_Projects/**/_drafts/*.mp4
+02_Projects/**/_drafts/*.mov
+02_Projects/**/_drafts/*.m4a
+02_Projects/**/_drafts/*.mp3
+02_Projects/**/_drafts/*.wav
+02_Projects/**/_drafts/*.webm
 
 # Raw clips (large, re-gatherable)
 clips/raw/
@@ -79,3 +97,12 @@ pipeline/work/
 
 # Loose video files at repo root
 *.mp4
+# Dean-facing clip library: keep metadata/cue sheets in git, keep media local
+clips/**/raw/*.mp4
+clips/**/raw/*.mov
+clips/**/raw/*.mkv
+clips/**/raw/*.webm
+clips/**/approved/*.mp4
+clips/**/approved/*.mov
+clips/**/approved/*.mkv
+clips/**/approved/*.webm
