@@ -10,7 +10,6 @@ editing out of the default promise.
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import json
 import subprocess
@@ -28,6 +27,8 @@ def _run(script_name: str, *args: str) -> None:
 
 def _project_topic(project_root: Path) -> str:
     name = project_root.name
+    if " - " in name and name.lower().startswith("video "):
+        return name.split(" - ", 1)[1]
     parts = name.split("-", 3)
     if len(parts) == 4 and parts[0].isdigit() and parts[1].isdigit() and parts[2].isdigit():
         name = parts[3]
@@ -40,15 +41,21 @@ def _write_if_missing(path: Path, text: str) -> None:
 
 
 def create_project(topic: str) -> Path:
-    slug = slugify(topic)
-    root = PROJECT_ROOT / "02_Projects" / f"{dt.date.today().isoformat()}-{slug}"
+    existing_numbers = []
+    for path in (PROJECT_ROOT / "02_Projects").glob("Video *"):
+        match = path.name.split(" ", 2)
+        if len(match) >= 2 and match[1].isdigit():
+            existing_numbers.append(int(match[1]))
+    next_number = (max(existing_numbers) + 1) if existing_numbers else 1
+    clean_topic = " ".join(topic.replace("/", " ").split())[:70].strip() or "New Video"
+    root = PROJECT_ROOT / "02_Projects" / f"Video {next_number} - {clean_topic}"
     project = resolve_project(root, seed=topic, create=True)
     if not project:
         raise SystemExit("[dean] Could not create project.")
 
     write_default_requirements(project, topic)
     _write_if_missing(
-        project.root / "01_outline.md",
+        project.root / "outline.txt",
         f"# Outline: {topic}\n\n"
         "## Hooks\n\n"
         "- \n\n"
@@ -60,59 +67,44 @@ def create_project(topic: str) -> Path:
         "- Let me know in the comments section below.\n",
     )
     _write_if_missing(
-        project.root / "02_script.md",
+        project.root / "script.txt",
         "# Optional Full Script\n\n"
         "Dean usually records from the outline. Use this only when a word-for-word script is requested.\n",
     )
     _write_if_missing(
-        project.root / "03_metadata.txt",
-        "# Metadata\n\nRun `python3 scripts/dean.py metadata <project>` after the outline is ready.\n",
+        project.root / "titles-and-metadata.txt",
+        "Titles and Metadata\n\nRun `python3 scripts/dean.py metadata <project>` after the outline is ready.\n",
     )
-    _write_clip_cue_sheet(project.root)
+    _write_clip_list(project.root)
     print(f"[dean] Created project: {project.root}")
     print("[dean] Next: python3 scripts/dean.py outline " + str(project.root))
     return project.root
 
 
-def _write_clip_cue_sheet(project_root: Path) -> Path:
+def _write_clip_list(project_root: Path) -> Path:
     project = resolve_project(project_root, create=False)
     raw = project.raw_clips_dir if project else project_root / "clips" / "raw"
-    out_path = project_root / "04_clip_cue_sheet.csv"
-    rows = []
+    out_path = project_root / "clip-list.txt"
+    lines = ["Clip List", "", "Clip folder: clips/raw/", ""]
     for sidecar in sorted(raw.glob("*.json")):
         try:
             data = json.loads(sidecar.read_text(encoding="utf-8"))
         except Exception:
             data = {}
-        rows.append(
-            {
-                "clip_file": sidecar.with_suffix(".mp4").name,
-                "topic": data.get("topic", ""),
-                "source_title": data.get("video_title", ""),
-                "source_channel": data.get("channel_name", ""),
-                "source_url": data.get("source_url", ""),
-                "source_start": data.get("timestamp_start", ""),
-                "source_end": data.get("timestamp_end", ""),
-                "editor_notes": "",
-            }
-        )
+        lines.append(f"- {sidecar.with_suffix('.mp4').name}")
+        if data.get("video_title"):
+            lines.append(f"  Source: {data.get('video_title')}")
+        if data.get("channel_name"):
+            lines.append(f"  Channel: {data.get('channel_name')}")
+        if data.get("source_url"):
+            lines.append(f"  URL: {data.get('source_url')}")
+        if data.get("timestamp_start") != "" and data.get("timestamp_end") != "":
+            lines.append(f"  Timestamp: {data.get('timestamp_start')} to {data.get('timestamp_end')}")
+        lines.append("")
 
-    with out_path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "clip_file",
-                "topic",
-                "source_title",
-                "source_channel",
-                "source_url",
-                "source_start",
-                "source_end",
-                "editor_notes",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(rows)
+    if len(lines) == 4:
+        lines.append("No clips gathered yet.")
+    out_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return out_path
 
 
@@ -120,15 +112,15 @@ def package_project(project_arg: str) -> None:
     project = resolve_project(project_arg, create=False)
     if not project or not project.root.exists():
         raise SystemExit(f"[dean] Project not found: {project_arg}")
-    cue_sheet = _write_clip_cue_sheet(project.root)
+    clip_list = _write_clip_list(project.root)
     raw_count = len(list(project.raw_clips_dir.glob("*.mp4")))
-    status = project.root / "00_READ_ME.md"
+    status = project.root / "video-summary.txt"
     text = status.read_text(encoding="utf-8") if status.exists() else f"# Project: {_project_topic(project.root)}\n"
     summary = (
         "\n\n## Latest Package Check\n\n"
         f"- Raw clips: {raw_count}\n"
-        f"- Clip folder: `clips/{project.root.name}/raw/`\n"
-        f"- Clip cue sheet: `{cue_sheet.name}`\n"
+        "- Clip folder: `clips/raw/`\n"
+        f"- Clip list: `{clip_list.name}`\n"
         "- Final edit: manual in Dean's editor\n"
     )
     if "## Latest Package Check" in text:
@@ -137,7 +129,7 @@ def package_project(project_arg: str) -> None:
         text = text.rstrip() + summary
     status.write_text(text + "\n", encoding="utf-8")
     print(f"[dean] Package checked: {project.root}")
-    print(f"[dean] Cue sheet: {cue_sheet}")
+    print(f"[dean] Clip list: {clip_list}")
 
 
 def main() -> None:
@@ -160,7 +152,7 @@ def main() -> None:
     metadata_parser = sub.add_parser("metadata", help="Generate upload titles/description/tags.")
     metadata_parser.add_argument("project")
 
-    package_parser = sub.add_parser("package", help="Refresh cue sheet and project status.")
+    package_parser = sub.add_parser("package", help="Refresh clip list and project status.")
     package_parser.add_argument("project")
 
     args = parser.parse_args()

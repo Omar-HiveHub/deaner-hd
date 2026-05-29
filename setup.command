@@ -66,7 +66,7 @@ python -m pip install -r requirements.txt --quiet
 ok "Python packages installed"
 
 step "[5/5] Checking config"
-mkdir -p 01_Ideas 02_Projects 03_Reference/channel-notes 03_Reference/past-scripts 03_Reference/transcripts clips 2>/dev/null || true
+mkdir -p 01_Ideas 02_Projects 03_Reference/channel-notes 03_Reference/past-scripts 03_Reference/transcripts 2>/dev/null || true
 if [ ! -f "config/.env" ] && [ -f "config/.env.example" ]; then
   cp config/.env.example config/.env
   warn "Created config/.env from config/.env.example"

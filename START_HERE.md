@@ -12,7 +12,7 @@ It is **not** a finished-video editor. Dean still makes the final edit and thumb
 - Generates title ideas, descriptions, and tags.
 - Searches for clips across YouTube, Reddit, and hockey websites like NHL.com, Sportsnet, TSN, and ESPN.
 - Saves clips into a clean project folder.
-- Builds a cue sheet so clips are easy to review in an editor.
+- Builds a simple clip list so clips are easy to review in an editor.
 
 ## What This System Does Not Do
 
@@ -65,18 +65,17 @@ start a new video about Evan Bouchard dirty hit at IIHF Worlds
 This creates a folder in `02_Projects/` with:
 
 ```text
-00_READ_ME.md
-01_outline.md
-02_script.md
-03_metadata.txt
-04_clip_cue_sheet.csv
-
-Clips are stored separately at `clips/<project-name>/raw/`.
+video-summary.txt
+outline.txt
+script.txt
+titles-and-metadata.txt
+clip-list.txt
+clips/raw/
 ```
 
 ### 3. Review Or Adjust The Outline
 
-Open `01_outline.md`. This is the recording structure.
+Open `outline.txt`. This is the recording structure.
 
 Useful prompts:
 
@@ -95,7 +94,7 @@ Ask Codex:
 gather clips for this project
 ```
 
-Clips go into `clips/<project-name>/raw/`. The system also saves a matching `.json` file beside each clip so the source URL and timestamp are preserved.
+Clips go into that project's `clips/raw/` folder. The system also saves a matching `.json` file beside each clip so the source URL and timestamp are preserved.
 
 For a specific section, ask:
 
@@ -105,7 +104,7 @@ re-gather clips for the section about the hit replay
 
 ### 5. Pick Keeper Clips
 
-Open `clips/<project-name>/raw/` and watch the clips. Each clip has two files:
+Open the project's `clips/raw/` folder and watch the clips. Each clip has two files:
 
 ```text
 clip-name.mp4
@@ -122,7 +121,7 @@ Ask Codex:
 write the titles and metadata
 ```
 
-The output goes into `03_metadata.txt`.
+The output goes into `titles-and-metadata.txt`.
 
 ### 7. Package For Editing
 
@@ -132,22 +131,22 @@ Ask Codex:
 package this project for editing
 ```
 
-This refreshes `04_clip_cue_sheet.csv`, which Dean can use while editing.
+This refreshes `clip-list.txt`, which Dean can use while editing.
 
 ## Example Demo Project
 
 A finished example lives here:
 
 ```text
-02_Projects/2026-05-29-evan-bouchard-knocked-out-by-dirty-hit-at-worlds/
+02_Projects/Video 1 - Evan Bouchard Demo/
 ```
 
 Use it to see what the system produces:
 
-- `01_outline.md` shows the video structure.
-- `03_metadata.txt` shows title, description, and tag output.
-- `clips/2026-05-29-evan-bouchard-knocked-out-by-dirty-hit-at-worlds/raw/` shows gathered clips.
-- `04_clip_cue_sheet.csv` shows the source list for editing.
+- `outline.txt` shows the video structure.
+- `titles-and-metadata.txt` shows title, description, and tag output.
+- `clips/raw/` shows gathered clips.
+- `clip-list.txt` shows the source list for editing.
 
 This demo is already gathered, so you can show it without running another clip search or hitting rate limits.
 
@@ -161,8 +160,8 @@ Recommended live flow:
 2. Open the Bouchard demo project in `02_Projects/`.
 3. Show the outline.
 4. Show the metadata file.
-5. Show `clips/<project-name>/raw/`.
-6. Show `04_clip_cue_sheet.csv`.
+5. Show `clips/raw/`.
+6. Show `clip-list.txt`.
 7. Explain that future projects follow the same flow.
 
 ## Prompt Reference

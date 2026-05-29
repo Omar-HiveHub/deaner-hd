@@ -6,7 +6,7 @@ Full workflow:
   2. Load clip sources from config/clip_sources.json
   3. Search YouTube, Reddit, and trusted web sources for usable hockey footage
   4. Download short edit-ready segments with yt-dlp
-  5. Save clips to clips/<project>/raw/
+  5. Save clips to the project's clips/raw/ folder
 
 Clip rules (always enforced):
   - Strictly < 5 seconds per clip (MAX_CLIP_DURATION = 4.9s)
@@ -22,8 +22,8 @@ Run:
     python3 gather_clips.py --topic "McKenna comeback" --auto
 
 Output:
-    clips/2026-05-29-topic-slug/raw/01-section-name-source-title.mp4
-    clips/2026-05-29-topic-slug/raw/01-section-name-source-title.json
+    02_Projects/Video 1 - Example/clips/raw/01-section-name-source-title.mp4
+    02_Projects/Video 1 - Example/clips/raw/01-section-name-source-title.json
 """
 
 import os
@@ -53,7 +53,7 @@ YOUTUBE_API_KEY     = os.getenv("YOUTUBE_DATA_API_KEY")
 CLIP_SOURCES_CONFIG = _PROJECT_ROOT / "config" / "clip_sources.json"
 SCRIPTED_DIR        = _PROJECT_ROOT / "03_Reference" / "past-scripts"
 RECORDED_DIR        = _PROJECT_ROOT / "03_Reference"
-RAW_CLIPS_DIR       = _PROJECT_ROOT / "clips" / "raw"
+RAW_CLIPS_DIR       = _PROJECT_ROOT / "02_Projects" / "Loose Clips" / "clips" / "raw"
 FFMPEG_DIR          = "/opt/homebrew/bin"
 COOKIES_FILE        = _PROJECT_ROOT / "config" / "youtube-cookies.txt"
 
@@ -1125,7 +1125,7 @@ def gather_clips_for_topic(
     auto=False — interactive; prompts for timestamps. Enforces 4.9s max.
     """
     raw_clips_dir = project.raw_clips_dir if project else RAW_CLIPS_DIR
-    script_dir = project.script_dir if project else SCRIPTED_DIR
+    script_dir = project.root if project else SCRIPTED_DIR
     if project:
         write_default_requirements(project, topic)
         print(f"[gather_clips] Project: {project.root}")
@@ -1554,7 +1554,7 @@ def main():
     )
     parser.add_argument(
         "--project", type=str, default="",
-        help="Optional project slug/path. Uses that package's outline and top-level raw clip folder."
+        help="Optional project slug/path. Uses that package's outline and clips/raw folder."
     )
     parser.add_argument(
         "--search-provider",

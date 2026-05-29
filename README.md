@@ -32,16 +32,15 @@ python3 scripts/dean.py package <project>
 
 ## Project Shape
 
-New projects live under `02_Projects/YYYY-MM-DD-topic-slug/`:
+New projects live under `02_Projects/Video 1 - Topic Name/`:
 
 ```text
-00_READ_ME.md
-01_outline.md
-02_script.md
-03_metadata.txt
-04_clip_cue_sheet.csv
-
-Clips live separately at `clips/<project-name>/raw/`.
+video-summary.txt
+outline.txt
+script.txt
+titles-and-metadata.txt
+clip-list.txt
+clips/raw/
 ```
 
 No thumbnail folder is created. Dean makes thumbnails manually.

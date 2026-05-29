@@ -8,13 +8,13 @@ Workflow:
   1. Accept a script, transcript, or project folder.
   2. Locate matching transcript in 03_Reference/transcripts/ or a project outline/script.
   3. Pass the script/transcript to claude_client.generate_metadata()
-  4. Save output as `03_metadata.txt` in the project package.
+  4. Save output as `titles-and-metadata.txt` in the project package.
 
 Run:
-    python3 scripts/dean.py metadata 2026-05-29-topic-slug
+    python3 scripts/dean.py metadata "Video 1 - Example"
 
 Output:
-    02_Projects/2026-05-29-topic-slug/03_metadata.txt
+    02_Projects/Video 1 - Example/titles-and-metadata.txt
 """
 
 import argparse
@@ -101,7 +101,7 @@ def main():
     elif project:
         script_path = latest_script(project, _PROJECT_ROOT / "03_Reference" / "past-scripts")
         if not script_path or not script_path.exists():
-            print(f"[generate_metadata] No project script found in {project.script_dir}")
+            print(f"[generate_metadata] No project outline/script found in {project.root}")
             sys.exit(1)
         summary = script_path.read_text(encoding="utf-8")[:3000]
         target_path = script_path

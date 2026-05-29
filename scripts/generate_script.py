@@ -95,13 +95,13 @@ def save_script(script_markdown: str, topic: str, topic_type: str, output_format
     if project:
         write_default_requirements(project, topic)
         if getattr(project, "simple_layout", False) and output_format == "script":
-            output_path = project.root / "02_script.md"
+            output_path = project.full_script_path
         else:
             output_path = project.script_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
     else:
         SCRIPTED_DIR.mkdir(parents=True, exist_ok=True)
-        output_path = SCRIPTED_DIR / f"{TODAY}-{slug}.md"
+        output_path = SCRIPTED_DIR / f"{TODAY}-{slug}.txt"
 
     # Estimate word count (strip production markers for the count)
     spoken_text = re.sub(r"\[(?:CLIP|INTERVIEW|GRAPHIC|CARD|VERIFY)[^\]]*\]", "", script_markdown)

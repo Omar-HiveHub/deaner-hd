@@ -109,11 +109,11 @@
 The confirmed production flow for every video:
 
 1. **Fetch ideas** — pull latest NHL news, Reddit, YouTube, competitor uploads, and schedule context. Save source reports in `01_Ideas/`.
-2. **Create project package** — one folder under `02_Projects/YYYY-MM-DD-slug/`.
+2. **Create project package** — one folder under `02_Projects/Video 1 - Topic Name/`.
 3. **Generate outline and metadata** — write Dean's recording outline first, with `[CLIP:]`, `[INTERVIEW:]`, and `[GRAPHIC:]` cues. Use a full prose script only when requested.
-4. **Gather clips from the outline** — gather clips into `clips/YYYY-MM-DD-slug/raw/`.
+4. **Gather clips from the outline** — gather clips into that project's `clips/raw/` folder.
 5. **Review clips** — Dean opens the raw clip folder and uses the useful clips in his editor.
-6. **Package for manual editing** — generate `04_clip_cue_sheet.csv`, keep `03_metadata.txt` ready to paste, and edit manually in Dean's editor.
+6. **Package for manual editing** — generate `clip-list.txt`, keep `titles-and-metadata.txt` ready to paste, and edit manually in Dean's editor.
 
 ---
 
@@ -149,7 +149,7 @@ What makes a DeanerHD video perform well (from kickoff call analysis):
 
 - The system is a production assistant, not an upload-ready editor.
 - Final editing, thumbnails, graphics, SFX, and exact clip-to-transcript syncing are manual.
-- The active promise is ideas, outlines/scripts, metadata, organized clip gathering, transcripts/reference, and clean cue sheets.
+- The active promise is ideas, outlines/scripts, metadata, organized clip gathering, transcripts/reference, and clean clip lists.
 
 ## System Notes
 

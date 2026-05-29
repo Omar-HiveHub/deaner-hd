@@ -97,12 +97,8 @@ pipeline/work/
 
 # Loose video files at repo root
 *.mp4
-# Dean-facing clip library: keep metadata/cue sheets in git, keep media local
-clips/**/raw/*.mp4
-clips/**/raw/*.mov
-clips/**/raw/*.mkv
-clips/**/raw/*.webm
-clips/**/approved/*.mp4
-clips/**/approved/*.mov
-clips/**/approved/*.mkv
-clips/**/approved/*.webm
+# Dean-facing project clip folders: keep metadata in git, keep media local
+02_Projects/*/clips/raw/*.mp4
+02_Projects/*/clips/raw/*.mov
+02_Projects/*/clips/raw/*.mkv
+02_Projects/*/clips/raw/*.webm

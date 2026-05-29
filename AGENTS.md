@@ -2,7 +2,7 @@
 
 This repo is a simplified local production assistant for DeanerHD. Keep Dean's
 workflow simple: ideas, outlines/scripts, metadata, organized clip gathering,
-cue sheets, and edit-ready project folders.
+clip lists, and edit-ready project folders.
 
 ## Current Promise
 
@@ -17,11 +17,10 @@ cue sheets, and edit-ready project folders.
 
 - Dean-facing docs stay at root: `START_HERE.md`, `README.md`, `DEAN.md`.
 - Active projects live in `02_Projects/`.
-- Each project should stay minimal: `00_READ_ME.md`, `01_outline.md`,
-  `02_script.md`, `03_metadata.txt`, and `04_clip_cue_sheet.csv`.
-  Gathered clips live in the matching top-level `clips/<project-name>/raw/` folder.
+- Each project should stay minimal: `video-summary.txt`, `outline.txt`,
+  `script.txt`, `titles-and-metadata.txt`, `clip-list.txt`, and `clips/raw/`.
 - Keep rejected junk, test runs, and internal notes out of Dean-facing folders.
-- Preserve `.json` sidecars when reorganizing clip folders. They carry the
+- Preserve `.json` sidecars when reorganizing clips. They carry the
   source URL and basic clip metadata.
 
 ## Main Commands

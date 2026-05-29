@@ -1,0 +1,18 @@
+Video 2 Placeholder
+
+Use this folder for Dean's next video.
+
+Expected files once generated:
+- outline.txt
+- script.txt, only if a full script is requested
+- titles-and-metadata.txt
+- clip-list.txt, after clips are gathered/package checked
+- clips/raw/ for gathered clips
+
+## Latest Package Check
+
+- Raw clips: 0
+- Clip folder: `clips/raw/`
+- Clip list: `clip-list.txt`
+- Final edit: manual in Dean's editor
+

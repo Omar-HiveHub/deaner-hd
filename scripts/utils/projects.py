@@ -14,8 +14,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PROJECTS_DIR = PROJECT_ROOT / "02_Projects"
-CLIPS_DIR = PROJECT_ROOT / "clips"
-LEGACY_PROJECTS_DIR = PROJECT_ROOT / "pipeline" / "projects"
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -29,8 +27,6 @@ def slugify(text: str, max_len: int = 60) -> str:
 class ProjectPaths:
     root: Path
     slug: str
-    script_dir: Path
-    metadata_dir: Path
     notes_dir: Path
     raw_clips_dir: Path
     drafts_dir: Path
@@ -47,31 +43,35 @@ class ProjectPaths:
     @property
     def script_path(self) -> Path:
         if self.simple_layout:
-            return self.root / "01_outline.md"
-        return self.script_dir / f"{self.package_slug}-script.md"
+            return self.root / "outline.txt"
+        return self.root / "outline.txt"
+
+    @property
+    def full_script_path(self) -> Path:
+        return self.root / "script.txt"
 
     @property
     def metadata_path(self) -> Path:
         if self.simple_layout:
-            return self.root / "03_metadata.txt"
-        return self.metadata_dir / f"{self.package_slug}-metadata.txt"
+            return self.root / "titles-and-metadata.txt"
+        return self.root / "titles-and-metadata.txt"
 
     @property
     def requirements_path(self) -> Path:
         if self.simple_layout:
-            return self.root / "00_READ_ME.md"
-        return self.notes_dir / f"{self.package_slug}-requirements.md"
+            return self.root / "video-summary.txt"
+        return self.root / "video-summary.txt"
 
     @property
     def proof_path(self) -> Path:
-        return self.notes_dir / f"{self.package_slug}-proof.md"
+        return self.root / "clip-list.txt"
 
 def resolve_project(project: str | Path | None, seed: str = "video", create: bool = False) -> ProjectPaths | None:
     """
     Resolve a project slug or path to the canonical package shape.
 
     - Existing absolute/relative paths are used directly.
-    - Bare slugs are created under 02_Projects/YYYY-MM-DD-slug unless
+    - Bare slugs are created under 02_Projects/ unless
       a matching package already exists.
     - Returns None when no project was requested so callers can keep flat
       backwards-compatible behavior.
@@ -86,7 +86,7 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
     raw_path = Path(project_text).expanduser()
     is_path = (
         raw_path.is_absolute()
-        or raw_path.parts[:2] in {("pipeline", "projects"), ("02_Projects",)}
+        or raw_path.parts[:1] == ("02_Projects",)
         or "/" in project_text
     )
     if is_path:
@@ -95,8 +95,8 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
     else:
         exact_root = PROJECTS_DIR / project_text
         matches = sorted(PROJECTS_DIR.glob(f"*-{slug_seed}"))
-        if not matches and LEGACY_PROJECTS_DIR.exists():
-            matches = sorted(LEGACY_PROJECTS_DIR.glob(f"*-{slug_seed}"))
+        if not matches:
+            matches = sorted(PROJECTS_DIR.glob(f"*{project_text}*"))
         root = exact_root if exact_root.exists() else (matches[-1] if matches else PROJECTS_DIR / f"{today}-{slug_seed}")
         slug = slug_seed
 
@@ -104,10 +104,8 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
     paths = ProjectPaths(
         root=root,
         slug=slug,
-        script_dir=root if simple_layout else root / "script",
-        metadata_dir=root if simple_layout else root / "metadata",
         notes_dir=root if simple_layout else root / "notes",
-        raw_clips_dir=CLIPS_DIR / root.name / "raw" if simple_layout else root / "clips" / "raw",
+        raw_clips_dir=root / "clips" / "raw",
         drafts_dir=root / "_drafts",
         assets_dir=root / "source_assets" if simple_layout else root / "assets",
         scorecards_dir=root / "source_assets" / "scorecards" if simple_layout else root / "assets" / "scorecards",
@@ -118,8 +116,6 @@ def resolve_project(project: str | Path | None, seed: str = "video", create: boo
 
     if create:
         directories = [
-            paths.script_dir,
-            paths.metadata_dir,
             paths.raw_clips_dir,
         ]
         if not paths.simple_layout:
@@ -134,7 +130,7 @@ def latest_script(project: ProjectPaths | None, fallback_dir: Path) -> Path | No
     if project:
         if project.simple_layout:
             candidates = []
-            for name in ("01_outline.md", "02_script.md"):
+            for name in ("outline.txt", "script.txt"):
                 path = project.root / name
                 if path.exists():
                     text = path.read_text(encoding="utf-8", errors="ignore").strip()
@@ -144,7 +140,7 @@ def latest_script(project: ProjectPaths | None, fallback_dir: Path) -> Path | No
                 return sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True)[0]
         if project.script_path.exists():
             return project.script_path
-        files = sorted(project.script_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+        files = sorted(project.root.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
         if files:
             return files[0]
     files = sorted(fallback_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -160,14 +156,14 @@ def write_default_requirements(project: ProjectPaths, title: str = "") -> None:
             f"# Project: {topic}\n\n"
             "## Status\n\n"
             "- Outline: not started\n"
-            "- Metadata: not started\n"
-            "- Clips gathered: not started\n"
+            "- Titles/metadata: not started\n"
+            "- Clips: not gathered yet\n"
             "- Final edit: manual in Dean's editor\n\n"
             "## Simple Workflow\n\n"
-            "1. Write or approve `01_outline.md`.\n"
-            "2. Gather clips into the matching folder under `clips/`.\n"
-            "3. Use `04_clip_cue_sheet.csv` and the gathered clips for manual editing.\n"
-            "4. Use `03_metadata.txt` for upload copy.\n\n"
+            "1. Write or approve `outline.txt`.\n"
+            "2. Gather clips into `clips/raw/`.\n"
+            "3. Use `titles-and-metadata.txt` for upload copy.\n"
+            "4. Use `clip-list.txt` and the gathered clips while editing.\n\n"
             "## Promise\n\n"
             "This folder is an edit-ready production package. Final editing is manual.\n",
             encoding="utf-8",

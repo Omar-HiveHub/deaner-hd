@@ -1,0 +1,41 @@
+Video 1 - Evan Bouchard Demo
+
+This is the example project Omar can show on the handoff call. It demonstrates the simplified workflow: outline, optional script, upload metadata, gathered clips, and a simple clip list for editing.
+
+Files in this project:
+
+- outline.txt: Dean-style structure with hooks, section beats, CTA options, and clip cues.
+- script.txt: optional full-script example if Dean wants word-for-word help.
+- titles-and-metadata.txt: title ideas, description, and tags.
+- clip-list.txt: clip filenames, source titles, source URLs, and timestamps.
+- clips/raw/: gathered demo clips.
+
+Demo topic:
+
+Evan Bouchard takes a dangerous hit during Canada vs USA at Worlds. This works well as a demo because it is timely, emotional, and clip-driven.
+
+Current status:
+
+- Raw clips gathered: 12
+- Thumbnail workflow: not included
+- Final video assembly: not included
+- Final edit: manual in Dean's editor
+
+How to present this on the call:
+
+1. Open START_HERE.md first and show Dean the simple workflow.
+2. Open this project folder under 02_Projects.
+3. Show outline.txt as the recording structure.
+4. Show titles-and-metadata.txt as the upload copy output.
+5. Open clips/raw/ to show the gathered clips.
+6. Open clip-list.txt to show where clips came from.
+
+The key message: this is a production assistant for ideas, writing, metadata, clip gathering, and organization. Dean still does the final creative edit and thumbnails.
+
+## Latest Package Check
+
+- Raw clips: 12
+- Clip folder: `clips/raw/`
+- Clip list: `clip-list.txt`
+- Final edit: manual in Dean's editor
+
